@@ -56,9 +56,10 @@ only; browser → Next.js server (BFF) → Supabase path proven end to end.
 
 ## C. Deploy — *together*
 
-- [ ] Push to GitHub; import the repo into **Vercel**; add env vars; deploy.
+- [x] Push to GitHub.
+- [x] Import the repo into **Vercel**; add env vars; deploy.
 - [x] Run the migration against the Supabase project.
-- [ ] Confirm the deployed "hello cellar" lists the seeded wines.
+- [x] Confirm the deployed "hello cellar" lists the seeded wines.
 
 ---
 
@@ -69,7 +70,7 @@ only; browser → Next.js server (BFF) → Supabase path proven end to end.
 - [x] `pnpm build` passes.
 - [x] Migration applies cleanly to Supabase.
 - [x] Seeded wines appear locally through the BFF.
-- [ ] Seeded wines appear on the deployed Vercel URL.
+- [x] Seeded wines appear on the deployed Vercel URL.
 - [x] Service-role key and AI provider keys are not exposed to the browser bundle.
 
 ---

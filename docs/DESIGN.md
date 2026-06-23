@@ -1,7 +1,7 @@
 # Wine Cellar App — High-Level Design Document
 
 **Status:** Draft for alignment
-**Last updated:** 2026-06-15
+**Last updated:** 2026-06-23
 **Companion to:** [PRD.md](./PRD.md)
 
 ---
@@ -105,7 +105,7 @@ wines
   location          text  null           -- "Rack B, row 3"
   notes             text  null           -- owner-visible cellar notes
   photo_path        text  null           -- Supabase Storage key
-  extraction_meta   jsonb null           -- model, confidence, raw fields
+  extraction_meta   jsonb null           -- provider/model, confidence, raw_text, fallback/error metadata
   created_at        timestamptz default now()
   updated_at        timestamptz
 
@@ -117,6 +117,16 @@ tastings
   notes             text  null
   paired_with       text  null            -- "hotpot"
   tasted_on         date  default today
+  created_at        timestamptz default now()
+
+inventory_events
+  id (uuid, pk)
+  user_id (uuid, fk -> app_users.id)
+  wine_id (uuid, fk -> wines.id)
+  event_type        text                 -- purchase|open|tasting_open|adjustment|remove
+  quantity_delta    int                  -- +N for additions, -N for removals/opened bottles
+  note              text null
+  source            text null            -- capture|manual_edit|tasting|recommendation_accept
   created_at        timestamptz default now()
 
 preference_profiles                       -- one row per user
@@ -141,6 +151,11 @@ recommendations (log, optional but useful for learning/metrics)
 can be saved as a separate record so purchase date, price, quantity, and location remain accurate.
 When the UI or recommender needs one price for the "same wine" across records, use the latest
 user-entered exact price; otherwise preserve the record-level price.
+
+**Inventory history policy:** `wines.quantity` is the current fast-read value. Durable history
+lives in `inventory_events` so check-ins, opened bottles, tastings, and manual adjustments can be
+audited later. Phase 1 can create wines without events if needed, but Phase 2 should introduce
+events before quantity editing becomes a primary workflow.
 
 **Unknown-price policy:** exact cost is optional. If blank, v2 web enrichment can fill an estimated
 market price. If no reliable source is found, prompt the user for an exact price or a price band.
@@ -178,6 +193,8 @@ Supabase Auth user rather than changing cellar rows.
 5. `POST /api/wines` persists the record (links `photo_path`).
 6. If the user abandons the confirmation form, the uploaded photo is eligible for cleanup by age
    because it is not referenced by a saved wine.
+7. When inventory events are enabled, the initial save also writes a `purchase` or `adjustment`
+   event with `quantity_delta = quantity`.
 
 ### 4.2 Recommend a wine
 1. User opens **Recommend**, picks occasion + cuisine chips (or free text) + price range.
@@ -189,7 +206,7 @@ Supabase Auth user rather than changing cellar rows.
 4. The model returns ranked picks (top 3, #1 highlighted) each with `wine_id`, rationale, fit_score.
 5. Server validates picks reference real candidate IDs, logs to `recommendations`, returns to client.
 6. User can **Accept** → prompt to log a tasting or confirm the bottle was opened; only then apply
-   `quantity--`.
+   `quantity--` and write an `inventory_events` row.
 
 ### 4.3 Learn preferences
 1. After drinking, user logs a **tasting** (rating + notes).
@@ -209,6 +226,7 @@ Supabase Auth user rather than changing cellar rows.
 | `GET /api/wines/:id` | Wine detail. |
 | `PATCH /api/wines/:id` | Edit fields / adjust quantity. |
 | `DELETE /api/wines/:id` | Remove wine. |
+| `POST /api/wines/:id/inventory-events` | Add an inventory event and update current quantity. |
 | `POST /api/recommendations` | Occasion+cuisine+budget → ranked picks. |
 | `POST /api/tastings` | Log a tasting (triggers preference update). |
 | `GET /api/preferences` / `PATCH /api/preferences` | View/edit preference profile. |
@@ -228,7 +246,14 @@ open mode, switching to the session-mapped `app_users.id` once auth is enforced.
 - **Input:** the label image + instruction to return **only** JSON matching the wine schema, with
   `null` for anything not visible and a `confidence` per field. No guessing of vintage if absent.
 - **Output:** Zod-validated; low-confidence fields flagged in the UI for the user to confirm.
+  `extraction_meta` should retain provider/model, per-field confidence, `raw_text` when available,
+  whether a fallback was used, and a compact error/debug reason when extraction fails.
 - **Cost control:** downscale image client-side before upload; one call per scan.
+- **Reliability:** retry once on provider 429/5xx with bounded backoff; return an empty editable
+  form rather than blocking manual capture if all AI attempts fail.
+- **Back label:** support for an optional second image stays out of the Phase 1 critical path, but
+  the extraction interface should be shaped so `front_image` and optional `back_image` can be added
+  later without rewriting the capture flow.
 
 ### 6.2 Recommendation (reasoning)
 - **Default provider/model:** DeepSeek text model (`deepseek-v4-flash`) for everyday recs.
@@ -259,6 +284,9 @@ open mode, switching to the session-mapped `app_users.id` once auth is enforced.
   `AI_PREF_PROVIDER=deepseek`, `AI_PREF_MODEL=deepseek-v4-flash`.
 - Provider keys stay in server env vars only. Start with the cheapest provider likely to meet
   quality needs, then benchmark against real cellar labels and recommendation prompts.
+- Log provider, model, latency, fallback usage, and compact error reason for AI calls. Avoid storing
+  full provider responses unless needed for debugging, because label photos and OCR text may be
+  private.
 
 ---
 
@@ -307,7 +335,7 @@ is a configuration/auth swap, not a data-model or access-pattern change.
 |---|---|---|
 | **0. Scaffold** | Next.js + Tailwind + Supabase project, schema + RLS, auth in open mode, deploy a "hello cellar". | Skeleton deployed. |
 | **1. Capture** | Photo upload, hosted vision extraction, confirm form, save wine, photo storage. | Can catalog wines. |
-| **2. Cellar** | List/grid, search/filter, detail, edit, quantity +/-. | Usable inventory. |
+| **2. Cellar** | List/grid, search/filter, detail, edit, quantity +/-, inventory event history. | Usable inventory. |
 | **3. Recommend** | Recommendation form + endpoint + DeepSeek reasoning + results UI. | Core value delivered. |
 | **4. Preferences** | Tasting log + preference profile + injection into recs. | Recs get personal. |
 | **5. Polish/PWA** | Manifest, icons, install prompt, empty/error states, cost guardrails. | Shippable personal app. |
@@ -326,6 +354,7 @@ is a configuration/auth swap, not a data-model or access-pattern change.
 | Label OCR misreads (faded/foreign labels) | User confirmation step; confidence flags; manual edit always available. |
 | AI recommends a wine not in cellar (hallucination) | Server validates `wine_id` against candidate set; reject + retry. |
 | AI cost creep | Trim prompt payloads; downscale images; DeepSeek for text defaults; log token usage; reserve stronger models for explicit fallback/deep-pick paths. |
+| AI provider outage / rate limits | Bounded retry on transient failures; provider-agnostic fallback; manual editable capture remains available. |
 | Provider quality varies by task | Keep the AI gateway provider-agnostic; benchmark label extraction and recommendations on real examples before locking defaults. |
 | iOS PWA camera quirks | Use standard `<input capture>`; test on real device early; Capacitor as fallback path. |
 | Unknown prices weaken budgeted recs | Include unknown-price wines with explicit labeling; prompt for exact price or price band when web enrichment is unreliable. |
@@ -355,9 +384,24 @@ is a configuration/auth swap, not a data-model or access-pattern change.
 - Duplicate wines / repurchases remain separate records; latest user-entered price can be used
   when a single price is needed across records.
 - Quantity decrements only after a tasting is logged or the user confirms the bottle was opened.
+- Quantity changes should eventually write `inventory_events`; `wines.quantity` remains the current
+  read-optimized total.
 - Planned future tabs/features: **Tasting Experience** (lineup photo + live notes) and
   **multi-bottle capture**, both feeding the preference-memory layer. Optional back-label /
   second-image capture is also deferred.
 - Stack = **Next.js + Supabase + provider-agnostic AI gateway + Vercel**, PWA-first, Capacitor as
   the App Store path. v1 AI defaults: hosted vision model for labels, DeepSeek for text recs and
   preference updates.
+
+## 12. Competitive Reference Notes
+
+Two external cellar repos are useful references, but neither changes the core stack decision:
+
+- **Cellarion:** useful as a maturity reference for AI service boundaries, label-scan prompts,
+  retry/debug behavior, wine normalization, and future drink-window/search ideas. Do not copy its
+  heavier stack for v1: MongoDB, Meilisearch, Qdrant/vector search, background services, admin,
+  subscriptions, and full AI chat are outside this app's current scope.
+- **WineBox:** useful as the closer Phase 1/2 reference. Borrow the simple scan -> review/edit ->
+  check-in flow, optional back-label shape, raw OCR/vision text capture, and transaction-style
+  inventory history. Direct code reuse is not planned because the stack is Python/FastAPI/MongoDB,
+  while this app is Next.js/Supabase.
