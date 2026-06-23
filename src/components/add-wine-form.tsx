@@ -10,7 +10,7 @@ import {
   useMemo,
   useState,
 } from "react";
-import type { ExtractionOutput } from "@/lib/schemas";
+import { extractWineResponseSchema, type ExtractionOutput } from "@/lib/schemas";
 
 type FormState = {
   producer: string;
@@ -128,12 +128,14 @@ export function AddWineForm() {
         throw new Error(payload.error ?? "Extraction failed.");
       }
 
-      applyExtraction(payload.fields);
-      setPhotoPath(payload.photo_path);
-      setExtractionMeta(payload.extraction_meta ?? null);
-      setConfidence(payload.fields?.confidence ?? {});
+      const result = extractWineResponseSchema.parse(payload);
+
+      applyExtraction(result.fields);
+      setPhotoPath(result.photo_path);
+      setExtractionMeta(result.extraction_meta);
+      setConfidence(result.fields.confidence);
       setMessage(
-        payload.fallback
+        result.fallback
           ? "Could not read the label. Enter details manually."
           : "Label read. Review before saving.",
       );

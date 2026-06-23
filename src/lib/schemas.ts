@@ -92,7 +92,8 @@ export type CreateWineInput = z.infer<typeof createWineSchema>;
 export const extractWineResponseSchema = z.object({
   fields: extractionOutputSchema,
   photo_path: z.string(),
-  model: z.string(),
+  extraction_meta: z.record(z.string(), z.unknown()),
+  fallback: z.boolean(),
 });
 
 export type ExtractWineResponse = z.infer<typeof extractWineResponseSchema>;

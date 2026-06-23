@@ -123,8 +123,8 @@ inventory_events
   id (uuid, pk)
   user_id (uuid, fk -> app_users.id)
   wine_id (uuid, fk -> wines.id)
-  event_type        text                 -- purchase|open|tasting_open|adjustment|remove
-  quantity_delta    int                  -- +N for additions, -N for removals/opened bottles
+  event_type        text                 -- purchase|adjustment|consume|remove
+  quantity_delta    int                  -- +N for additions, -N for consumed/removed bottles
   note              text null
   source            text null            -- capture|manual_edit|tasting|recommendation_accept
   created_at        timestamptz default now()
@@ -152,10 +152,23 @@ can be saved as a separate record so purchase date, price, quantity, and locatio
 When the UI or recommender needs one price for the "same wine" across records, use the latest
 user-entered exact price; otherwise preserve the record-level price.
 
-**Inventory history policy:** `wines.quantity` is the current fast-read value. Durable history
-lives in `inventory_events` so check-ins, opened bottles, tastings, and manual adjustments can be
-audited later. Phase 1 can create wines without events if needed, but Phase 2 should introduce
-events before quantity editing becomes a primary workflow.
+**Inventory history policy:** `wines.quantity` is a read-optimized **cache**; the durable history
+lives in `inventory_events`. The two must stay consistent:
+
+- **Invariant:** any stock change updates `wines.quantity` **and** inserts an `inventory_events`
+  row **in the same transaction**, so the cache can always be reconciled from the event log
+  (`quantity == sum(quantity_delta)` for a wine, barring intentional `adjustment` corrections).
+- **A wine row is a line item, not a single bottle.** `quantity` is how many identical bottles are
+  held. Holding 6 bottles of one wine is one row with `quantity = 6`.
+- **Opening/consuming one of many** is a single `consume` event with `quantity_delta = -1`; the row
+  stays and `quantity` goes 6 → 5. The `source` field (`tasting` / `manual_edit` /
+  `recommendation_accept`) records *why*, so a separate `open` vs `tasting_open` type is unnecessary.
+- **`adjustment`** is for manual corrections (miscount, breakage) where delta isn't a normal
+  purchase/consume; **`remove`** zeroes out a record (e.g. a wine added by mistake).
+
+Phase 1 creates wines without events. Phase 2 introduces `inventory_events` and **backfills one
+`purchase` event per existing wine** (`quantity_delta = current quantity`) so history is consistent
+from day one, before quantity editing becomes a primary workflow.
 
 **Unknown-price policy:** exact cost is optional. If blank, v2 web enrichment can fill an estimated
 market price. If no reliable source is found, prompt the user for an exact price or a price band.

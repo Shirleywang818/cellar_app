@@ -7,6 +7,17 @@ type ExtractWineLabelArgs = {
   mimeType: string;
 };
 
+export type ExtractWineLabelResult = {
+  fields: ExtractionOutput;
+  raw_text: string | null;
+  fallback: boolean;
+  error: string | null;
+};
+
+function truncate(value: string, max = 2000) {
+  return value.length > max ? `${value.slice(0, max)}…` : value;
+}
+
 const EMPTY_EXTRACTION: ExtractionOutput = {
   producer: null,
   name: null,
@@ -74,23 +85,37 @@ Return only JSON matching the schema.
 export async function extractWineLabel({
   imageBytes,
   mimeType,
-}: ExtractWineLabelArgs): Promise<ExtractionOutput> {
+}: ExtractWineLabelArgs): Promise<ExtractWineLabelResult> {
   if (env.AI_LABEL_PROVIDER !== "gemini") {
-    return EMPTY_EXTRACTION;
+    return {
+      fields: EMPTY_EXTRACTION,
+      raw_text: null,
+      fallback: true,
+      error: `label provider "${env.AI_LABEL_PROVIDER}" not configured`,
+    };
   }
 
   if (!env.GEMINI_API_KEY) {
-    return EMPTY_EXTRACTION;
+    return {
+      fields: EMPTY_EXTRACTION,
+      raw_text: null,
+      fallback: true,
+      error: "missing GEMINI_API_KEY",
+    };
   }
 
   try {
-    return await extractWithGemini(imageBytes, mimeType);
+    const { fields, rawText } = await extractWithGemini(imageBytes, mimeType);
+    return { fields, raw_text: truncate(rawText), fallback: false, error: null };
   } catch (error) {
-    console.warn(
-      "Gemini label extraction fell back to manual entry:",
-      error instanceof Error ? error.message : error,
-    );
-    return EMPTY_EXTRACTION;
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn("Gemini label extraction fell back to manual entry:", message);
+    return {
+      fields: EMPTY_EXTRACTION,
+      raw_text: null,
+      fallback: true,
+      error: truncate(message, 300),
+    };
   }
 }
 
@@ -154,15 +179,17 @@ async function extractWithGemini(imageBytes: Buffer, mimeType: string) {
   }
 
   const parsed = JSON.parse(text);
-  return extractionOutputSchema.parse(parsed);
+  return { fields: extractionOutputSchema.parse(parsed), rawText: text };
 }
 
-export function getLabelExtractionMeta(fields: ExtractionOutput) {
+export function getLabelExtractionMeta(result: ExtractWineLabelResult) {
   return {
     provider: env.AI_LABEL_PROVIDER,
     model: env.AI_LABEL_MODEL,
-    confidence: fields.confidence,
-    raw_fields: fields,
+    confidence: result.fields.confidence,
+    raw_text: result.raw_text,
+    fallback: result.fallback,
+    error: result.error,
   };
 }
 

@@ -21,16 +21,16 @@ export async function POST(request: Request) {
     }
 
     const uploaded = await uploadTempLabelImage(image);
-    const fields = await extractWineLabel({
+    const result = await extractWineLabel({
       imageBytes: uploaded.bytes,
       mimeType: uploaded.mimeType,
     });
 
     return NextResponse.json({
-      fields,
+      fields: result.fields,
       photo_path: uploaded.path,
-      extraction_meta: getLabelExtractionMeta(fields),
-      fallback: isEmptyExtraction(fields),
+      extraction_meta: getLabelExtractionMeta(result),
+      fallback: result.fallback || isEmptyExtraction(result.fields),
     });
   } catch (error) {
     const message =
