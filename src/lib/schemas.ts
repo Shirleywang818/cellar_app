@@ -12,6 +12,15 @@ export type PriceBand = z.infer<typeof priceBandSchema>;
 
 export const priceSourceSchema = z.enum(["user", "web_estimate", "unknown"]);
 
+export const inventoryEventTypeSchema = z.enum([
+  "purchase",
+  "adjustment",
+  "consume",
+  "remove",
+]);
+
+export type InventoryEventType = z.infer<typeof inventoryEventTypeSchema>;
+
 export const wineTypeSchema = z.enum([
   "red",
   "white",
@@ -20,6 +29,8 @@ export const wineTypeSchema = z.enum([
   "dessert",
   "fortified",
 ]);
+
+export type WineType = z.infer<typeof wineTypeSchema>;
 
 export const wineListItemSchema = z.object({
   id: z.string().uuid(),
@@ -36,6 +47,37 @@ export const wineListItemSchema = z.object({
 });
 
 export type WineListItem = z.infer<typeof wineListItemSchema>;
+
+export const inventoryEventSchema = z.object({
+  id: z.string().uuid(),
+  user_id: z.string().uuid(),
+  wine_id: z.string().uuid(),
+  event_type: inventoryEventTypeSchema,
+  quantity_delta: z.number().int(),
+  note: z.string().nullable(),
+  source: z.string().nullable(),
+  created_at: z.string(),
+});
+
+export type InventoryEvent = z.infer<typeof inventoryEventSchema>;
+
+export const wineDetailSchema = wineListItemSchema.extend({
+  user_id: z.string().uuid(),
+  varietals: z.array(z.string()),
+  alcohol_pct: z.number().nullable(),
+  cost_per_bottle: z.number().nullable(),
+  price_source: priceSourceSchema.nullable(),
+  currency: z.string(),
+  purchase_date: z.string().nullable(),
+  location: z.string().nullable(),
+  notes: z.string().nullable(),
+  extraction_meta: z.record(z.string(), z.unknown()).nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  inventory_events: z.array(inventoryEventSchema).default([]),
+});
+
+export type WineDetail = z.infer<typeof wineDetailSchema>;
 
 export const extractionOutputSchema = z.object({
   producer: z.string().nullable(),
@@ -88,6 +130,36 @@ export const createWineSchema = z
   }));
 
 export type CreateWineInput = z.infer<typeof createWineSchema>;
+
+export const updateWineSchema = z.object({
+  producer: z.string().trim().min(1, "Producer is required."),
+  name: z.string().trim().min(1, "Name is required."),
+  vintage: z.number().int().min(1000).max(9999).nullable().optional(),
+  wine_type: wineTypeSchema,
+  varietals: z.array(z.string().trim().min(1)).default([]),
+  region: optionalTextSchema,
+  country: optionalTextSchema,
+  alcohol_pct: z.number().min(0).max(100).nullable().optional(),
+  cost_per_bottle: z.number().min(0).nullable().optional(),
+  price_band: priceBandSchema.nullable().optional(),
+  currency: z.string().trim().min(1).default("USD"),
+  purchase_date: optionalTextSchema,
+  location: optionalTextSchema,
+  notes: optionalTextSchema,
+});
+
+export type UpdateWineInput = z.infer<typeof updateWineSchema>;
+
+export const createInventoryEventSchema = z.object({
+  event_type: inventoryEventTypeSchema,
+  quantity_delta: z.number().int().refine((value) => value !== 0, {
+    message: "Quantity change cannot be 0.",
+  }),
+  note: optionalTextSchema,
+  source: optionalTextSchema,
+});
+
+export type CreateInventoryEventInput = z.infer<typeof createInventoryEventSchema>;
 
 export const extractWineResponseSchema = z.object({
   fields: extractionOutputSchema,
