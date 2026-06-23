@@ -91,7 +91,7 @@ export function InventoryControls({ wineId, quantity }: InventoryControlsProps) 
         ) : null}
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      <div className="mt-4 grid gap-3">
         <label className="grid gap-1 text-sm">
           <span className="font-medium">Add bottles</span>
           <div className="flex gap-2">
