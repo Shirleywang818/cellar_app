@@ -32,6 +32,26 @@ they become active work.
   - *Where:* `supabase/`. Action: add a migration (or a documented setup step in README) that
     creates the private `wine-labels` bucket. Do alongside the Phase 2 `inventory_events` migration.
 
+## Cellar (Phase 2 follow-ups)
+
+- **Orphaned label photo on wine delete.** `DELETE /api/wines/[id]` removes the row and cascades
+  `inventory_events`, but does not delete the label object from the `wine-labels` bucket.
+  - *Where:* `src/app/api/wines/[id]/route.ts` DELETE handler — fetch `photo_path` and remove the
+    Storage object (and/or a sweep job). Pairs with the existing abandoned-capture cleanup item.
+
+- **Search term injected into PostgREST `.or()`.** `listWines` interpolates the user query into the
+  `.or()` filter string; commas are stripped but `()`/`\`/`%`/`_` are not. Low severity in v1
+  (single-user, service-role, own rows only) but sanitize/escape before multi-user release, and to
+  avoid query errors on odd input.
+  - *Where:* `src/lib/cellar.ts` `listWines`.
+
+- **Edit form Price Band not disabled when cost present.** A band picked in the edit form is
+  silently overridden by the cost-derived band on PATCH. Disable it when a cost exists (the Add
+  form already does). *Where:* `src/components/wine-edit-form.tsx`.
+
+- **List signs a URL per wine per load.** Fine for tens–hundreds of bottles; if the cellar grows,
+  batch/caches signed URLs or add pagination. *Where:* `src/lib/cellar.ts`.
+
 ## Security (release-time)
 
 - **Storage RLS policies.** The bucket is private and only reached via the service-role BFF, so v1
