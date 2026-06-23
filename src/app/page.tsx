@@ -1,11 +1,11 @@
 import { Wine } from "lucide-react";
-import { listSeededWines } from "@/lib/cellar";
+import { listWines } from "@/lib/cellar";
 import { formatPriceBand, formatWineTitle } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const wines = await listSeededWines();
+  const wines = await listWines();
 
   return (
     <main className="shell">
@@ -13,25 +13,41 @@ export default async function Home() {
         <div>
           <p className="text-sm font-medium text-primary">Hello cellar</p>
           <h1 className="mt-1 text-3xl font-semibold tracking-normal">
-            Seeded wines
+            Cellar wines
           </h1>
         </div>
-        <div className="flex size-11 items-center justify-center rounded-md bg-primary text-primary-foreground">
-          <Wine aria-hidden="true" className="size-5" />
-        </div>
+        <a
+          className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-sm"
+          href="/add"
+        >
+          <Wine aria-hidden="true" className="size-4" />
+          Add
+        </a>
       </header>
 
       <section className="grid gap-3">
         {wines.length === 0 ? (
           <div className="rounded-md border border-border bg-card p-5 text-sm text-muted-foreground">
-            No seeded wines found. Run the migration and seed, then reload.
+            No wines found. Add a bottle to start your cellar.
           </div>
         ) : (
           wines.map((wine) => (
             <article
-              className="grid gap-3 rounded-md border border-border bg-card p-4 shadow-sm sm:grid-cols-[1fr_auto] sm:items-center"
+              className="grid gap-3 rounded-md border border-border bg-card p-4 shadow-sm sm:grid-cols-[72px_1fr_auto] sm:items-center"
               key={wine.id}
             >
+              <div className="flex size-[72px] items-center justify-center overflow-hidden rounded-md bg-muted">
+                {wine.photo_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    alt={`${formatWineTitle(wine)} label`}
+                    className="h-full w-full object-cover"
+                    src={wine.photo_url}
+                  />
+                ) : (
+                  <Wine aria-hidden="true" className="size-6 text-muted-foreground" />
+                )}
+              </div>
               <div>
                 <h2 className="font-medium">{formatWineTitle(wine)}</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
