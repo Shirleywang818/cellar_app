@@ -1,11 +1,32 @@
 import { Wine } from "lucide-react";
+import Link from "next/link";
+import { SearchFilterForm } from "@/components/search-filter-form";
 import { listWines } from "@/lib/cellar";
 import { formatPriceBand, formatWineTitle } from "@/lib/format";
+import { wineTypeSchema } from "@/lib/schemas";
 
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
-  const wines = await listWines();
+type HomeProps = {
+  searchParams: Promise<{
+    q?: string;
+    type?: string;
+    stock?: string;
+  }>;
+};
+
+export default async function Home({ searchParams }: HomeProps) {
+  const params = await searchParams;
+  const parsedType = wineTypeSchema.safeParse(params.type);
+  const selectedType = parsedType.success ? parsedType.data : "all";
+  const selectedStock =
+    params.stock === "in_stock" || params.stock === "empty" ? params.stock : "all";
+  const query = params.q?.trim() ?? "";
+  const wines = await listWines({
+    query,
+    wineType: selectedType,
+    stock: selectedStock,
+  });
 
   return (
     <main className="shell">
@@ -25,6 +46,12 @@ export default async function Home() {
         </a>
       </header>
 
+      <SearchFilterForm
+        query={query}
+        stock={selectedStock}
+        wineType={selectedType}
+      />
+
       <section className="grid gap-3">
         {wines.length === 0 ? (
           <div className="rounded-md border border-border bg-card p-5 text-sm text-muted-foreground">
@@ -32,8 +59,9 @@ export default async function Home() {
           </div>
         ) : (
           wines.map((wine) => (
-            <article
-              className="grid gap-3 rounded-md border border-border bg-card p-4 shadow-sm sm:grid-cols-[72px_1fr_auto] sm:items-center"
+            <Link
+              className="grid gap-3 rounded-md border border-border bg-card p-4 shadow-sm transition hover:border-primary/40 hover:shadow-md sm:grid-cols-[72px_1fr_auto] sm:items-center"
+              href={`/wines/${wine.id}`}
               key={wine.id}
             >
               <div className="flex size-[72px] items-center justify-center overflow-hidden rounded-md bg-muted">
@@ -66,7 +94,7 @@ export default async function Home() {
                   <dd className="font-medium">{formatPriceBand(wine.price_band)}</dd>
                 </div>
               </dl>
-            </article>
+            </Link>
           ))
         )}
       </section>

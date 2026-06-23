@@ -58,9 +58,63 @@ export type Database = {
           Pick<Database["public"]["Tables"]["wines"]["Row"], "user_id" | "producer" | "name" | "wine_type">;
         Update: Partial<Database["public"]["Tables"]["wines"]["Row"]>;
       };
+      inventory_events: {
+        Row: {
+          id: string;
+          user_id: string;
+          wine_id: string;
+          event_type: "purchase" | "adjustment" | "consume" | "remove";
+          quantity_delta: number;
+          note: string | null;
+          source: string | null;
+          created_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["inventory_events"]["Row"]> &
+          Pick<
+            Database["public"]["Tables"]["inventory_events"]["Row"],
+            "user_id" | "wine_id" | "event_type" | "quantity_delta"
+          >;
+        Update: Partial<Database["public"]["Tables"]["inventory_events"]["Row"]>;
+      };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      apply_inventory_event: {
+        Args: {
+          p_user_id: string;
+          p_wine_id: string;
+          p_event_type: "purchase" | "adjustment" | "consume" | "remove";
+          p_quantity_delta: number;
+          p_note?: string | null;
+          p_source?: string | null;
+        };
+        Returns: Database["public"]["Tables"]["inventory_events"]["Row"];
+      };
+      create_wine_with_purchase_event: {
+        Args: {
+          p_user_id: string;
+          p_producer: string;
+          p_name: string;
+          p_vintage: number | null;
+          p_wine_type: "red" | "white" | "rose" | "sparkling" | "dessert" | "fortified";
+          p_varietals: string[];
+          p_region: string | null;
+          p_country: string | null;
+          p_alcohol_pct: number | null;
+          p_quantity: number;
+          p_cost_per_bottle: number | null;
+          p_price_band: "under_100" | "101_200" | "201_300" | "301_500" | "500_plus" | null;
+          p_price_source: "user" | "web_estimate" | "unknown" | null;
+          p_currency: string;
+          p_purchase_date: string | null;
+          p_location: string | null;
+          p_notes: string | null;
+          p_photo_path: string | null;
+          p_extraction_meta: Json | null;
+        };
+        Returns: string;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };
