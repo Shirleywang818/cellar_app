@@ -59,15 +59,16 @@ export function InventoryControls({ wineId, quantity }: InventoryControlsProps) 
 
   return (
     <section className="rounded-md border border-border bg-card p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold">Inventory</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Current quantity is <span className="font-medium text-foreground">{quantity}</span>.
-          </p>
-        </div>
+      <div>
+        <h2 className="text-lg font-semibold">Inventory</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Current quantity is <span className="font-medium text-foreground">{quantity}</span>.
+        </p>
+      </div>
+
+      <div className="mt-4 grid gap-3">
         <button
-          className="inline-flex size-10 items-center justify-center rounded-md border border-input bg-background text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md border border-input bg-background px-4 text-sm font-medium shadow-sm transition hover:border-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
           disabled={isSubmitting || quantity <= 0}
           onClick={() =>
             submitEvent({
@@ -80,8 +81,14 @@ export function InventoryControls({ wineId, quantity }: InventoryControlsProps) 
           type="button"
         >
           <Minus aria-hidden="true" className="size-4" />
-          <span className="sr-only">Consume one bottle</span>
+          Consume one bottle
         </button>
+
+        {quantity <= 0 ? (
+          <p className="text-xs text-muted-foreground">
+            This button is disabled because the current quantity is 0.
+          </p>
+        ) : null}
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
