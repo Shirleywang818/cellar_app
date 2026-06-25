@@ -123,8 +123,8 @@ inventory_events
   id (uuid, pk)
   user_id (uuid, fk -> app_users.id)
   wine_id (uuid, fk -> wines.id)
-  event_type        text                 -- purchase|adjustment|consume|remove
-  quantity_delta    int                  -- +N for additions, -N for consumed/removed bottles
+  event_type        text                 -- purchase|adjustment|consume
+  quantity_delta    int                  -- +N for additions, -N for consumed bottles
   note              text null
   source            text null            -- capture|manual_edit|tasting|recommendation_accept
   created_at        timestamptz default now()
@@ -164,7 +164,12 @@ lives in `inventory_events`. The two must stay consistent:
   stays and `quantity` goes 6 → 5. The `source` field (`tasting` / `manual_edit` /
   `recommendation_accept`) records *why*, so a separate `open` vs `tasting_open` type is unnecessary.
 - **`adjustment`** is for manual corrections (miscount, breakage) where delta isn't a normal
-  purchase/consume; **`remove`** zeroes out a record (e.g. a wine added by mistake).
+  purchase/consume.
+- **Deleting a wine is a hard delete** (the row plus its `inventory_events` cascade), not an event.
+  There is intentionally no `remove` event type in v1. *Note:* the Phase 2 migration's CHECK
+  constraint still permits `remove` (migrations are immutable once applied); it is simply never
+  produced. App-layer types restrict to the three active types. Tighten the DB constraint later
+  only if desired (see BACKLOG).
 
 Phase 1 creates wines without events. Phase 2 introduces `inventory_events` and **backfills one
 `purchase` event per existing wine** (`quantity_delta = current quantity`) so history is consistent
@@ -399,6 +404,8 @@ is a configuration/auth swap, not a data-model or access-pattern change.
 - Quantity decrements only after a tasting is logged or the user confirms the bottle was opened.
 - Quantity changes should eventually write `inventory_events`; `wines.quantity` remains the current
   read-optimized total.
+- Wine deletion = **hard delete** (row + cascade events). No `remove` event type in v1; active
+  inventory event types are `purchase | adjustment | consume`.
 - Planned future tabs/features: **Tasting Experience** (lineup photo + live notes) and
   **multi-bottle capture**, both feeding the preference-memory layer. Optional back-label /
   second-image capture is also deferred.

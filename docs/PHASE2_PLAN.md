@@ -21,7 +21,7 @@ stock while preserving an auditable inventory history.
 - `inventory_events` migration, RLS policies, backfill, and atomic RPC helpers.
 - Wine detail page at `/wines/[id]`.
 - Edit/delete wine APIs.
-- Quantity event API using `purchase | adjustment | consume | remove`.
+- Quantity event API using `purchase | adjustment | consume`.
 - Search/filter list UI.
 
 **Out of scope (later phases):**

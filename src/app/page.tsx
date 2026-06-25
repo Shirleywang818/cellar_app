@@ -1,4 +1,4 @@
-import { Wine } from "lucide-react";
+import { Sparkles, Wine } from "lucide-react";
 import Link from "next/link";
 import { SearchFilterForm } from "@/components/search-filter-form";
 import { listWines } from "@/lib/cellar";
@@ -37,13 +37,22 @@ export default async function Home({ searchParams }: HomeProps) {
             Cellar wines
           </h1>
         </div>
-        <a
-          className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-sm"
-          href="/add"
-        >
-          <Wine aria-hidden="true" className="size-4" />
-          Add
-        </a>
+        <div className="flex items-center gap-2">
+          <Link
+            className="inline-flex items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium shadow-sm"
+            href="/recommend"
+          >
+            <Sparkles aria-hidden="true" className="size-4" />
+            Recommend
+          </Link>
+          <Link
+            className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-sm"
+            href="/add"
+          >
+            <Wine aria-hidden="true" className="size-4" />
+            Add
+          </Link>
+        </div>
       </header>
 
       <SearchFilterForm
