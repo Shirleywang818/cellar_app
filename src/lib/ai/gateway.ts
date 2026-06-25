@@ -45,7 +45,7 @@ function truncate(value: string, max = 2000) {
 // DeepSeek), fall back to that provider's known-good default instead of sending it.
 const REC_MODEL_DEFAULTS: Record<string, string> = {
   gemini: "gemini-2.5-flash",
-  deepseek: "deepseek-chat",
+  deepseek: "deepseek-v4-flash",
 };
 
 function resolveRecModel(provider: string) {

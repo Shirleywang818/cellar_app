@@ -144,6 +144,10 @@ select a band directly.
 - **Inventory value & analytics:** total cellar value, by region/type, cost basis.
 - **Native app wrapper** (Capacitor) for App Store distribution + better camera/widgets.
 - **Voice input** for occasion/cuisine; **"snap the menu"** to recommend against a restaurant dish.
+- **Voice-driven tasting capture:** speak the wine name + rating + tasting notes; the app
+  transcribes and **fuzzy-matches the spoken wine to the right cellar bottle** before logging.
+  Nicer than typing during a tasting; deferred from v1 (needs speech capture + a matching step).
+  In v1, tasting is logged manually from the wine detail page (see Phase 4).
 
 ---
 

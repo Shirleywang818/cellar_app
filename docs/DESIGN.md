@@ -227,10 +227,13 @@ Supabase Auth user rather than changing cellar rows.
    `quantity--` and write an `inventory_events` row.
 
 ### 4.3 Learn preferences
-1. After drinking, user logs a **tasting** (rating + notes).
-2. A lightweight job (on save, or batched) asks the configured preference model to update the user's preference
-   `summary` + `structured` profile from recent tastings.
+1. User logs a **tasting** (rating + notes) from the wine detail page. **This does not change
+   `quantity`** — stock is moved only by `inventory_events` (consume), so a tasting and an opened
+   bottle are recorded independently and never double-count.
+2. A lightweight best-effort job (on save) asks the configured preference model to update the user's
+   `summary` + `structured` profile from recent tastings; if it fails, the tasting is still saved.
 3. The updated `summary` is injected into future recommendation prompts (§4.2 step 3).
+   *(v1 logs tastings manually on the detail page; voice-driven tasting capture is a future feature.)*
 
 ---
 
@@ -274,7 +277,8 @@ open mode, switching to the session-mapped `app_users.id` once auth is enforced.
   later without rewriting the capture flow.
 
 ### 6.2 Recommendation (reasoning)
-- **Default provider/model:** DeepSeek text model (`deepseek-v4-flash`) for everyday recs.
+- **Default provider/model:** Gemini (`gemini-2.5-flash`) for Phase 3 testing; DeepSeek
+  (`deepseek-v4-flash`) remains the cost-testing target once billing is configured.
 - **Fallback/deep pick:** optional stronger model such as DeepSeek Pro or Claude Sonnet when the
   user explicitly asks for a higher-quality "deep pick."
 - **Prompt inputs:** occasion, cuisine, budget, the candidate list (in-stock + in-budget, with
@@ -286,9 +290,10 @@ open mode, switching to the session-mapped `app_users.id` once auth is enforced.
   forcing a pick (PRD FR-12 / C4).
 
 ### 6.3 Preference learning
-- **Default provider/model:** DeepSeek text model (`deepseek-v4-flash`). Given recent tastings +
-  current profile → updated structured profile + a concise natural-language `summary` (a few
-  sentences). Cheap, runs on tasting save.
+- **Default provider/model:** Gemini (`gemini-2.5-flash`) for Phase 4 testing; DeepSeek
+  (`deepseek-v4-flash`) remains available through the same gateway once billing is configured.
+  Given recent tastings + current profile → updated structured profile + a concise natural-language
+  `summary` (a few sentences). Cheap, runs on tasting save.
 
 ### 6.4 AI gateway configuration
 - All AI calls run server-side through a small gateway interface, so product code depends on
@@ -298,8 +303,8 @@ open mode, switching to the session-mapped `app_users.id` once auth is enforced.
   `AI_PREF_PROVIDER`, `AI_PREF_MODEL`, `AI_DEEP_REC_PROVIDER`, `AI_DEEP_REC_MODEL`.
 - Suggested v1 defaults:
   `AI_LABEL_PROVIDER=gemini`, `AI_LABEL_MODEL=gemini-2.5-flash`,
-  `AI_REC_PROVIDER=deepseek`, `AI_REC_MODEL=deepseek-v4-flash`,
-  `AI_PREF_PROVIDER=deepseek`, `AI_PREF_MODEL=deepseek-v4-flash`.
+  `AI_REC_PROVIDER=gemini`, `AI_REC_MODEL=gemini-2.5-flash`,
+  `AI_PREF_PROVIDER=gemini`, `AI_PREF_MODEL=gemini-2.5-flash`.
 - Provider keys stay in server env vars only. Start with the cheapest provider likely to meet
   quality needs, then benchmark against real cellar labels and recommendation prompts.
 - Log provider, model, latency, fallback usage, and compact error reason for AI calls. Avoid storing
@@ -406,6 +411,9 @@ is a configuration/auth swap, not a data-model or access-pattern change.
   read-optimized total.
 - Wine deletion = **hard delete** (row + cascade events). No `remove` event type in v1; active
   inventory event types are `purchase | adjustment | consume`.
+- Tasting logging lives on the **wine detail page** in v1 and **does not change quantity** (keeps
+  `inventory_events` the single source of truth for stock; avoids double-counting). Voice-driven
+  tasting capture is deferred to a future feature.
 - Planned future tabs/features: **Tasting Experience** (lineup photo + live notes) and
   **multi-bottle capture**, both feeding the preference-memory layer. Optional back-label /
   second-image capture is also deferred.
