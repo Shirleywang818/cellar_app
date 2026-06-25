@@ -76,6 +76,24 @@ export type Database = {
           >;
         Update: Partial<Database["public"]["Tables"]["inventory_events"]["Row"]>;
       };
+      tastings: {
+        Row: {
+          id: string;
+          user_id: string;
+          wine_id: string;
+          rating: number | null;
+          notes: string | null;
+          paired_with: string | null;
+          tasted_on: string;
+          created_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["tastings"]["Row"]> &
+          Pick<
+            Database["public"]["Tables"]["tastings"]["Row"],
+            "user_id" | "wine_id"
+          >;
+        Update: Partial<Database["public"]["Tables"]["tastings"]["Row"]>;
+      };
       preference_profiles: {
         Row: {
           user_id: string;

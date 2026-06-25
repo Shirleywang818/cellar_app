@@ -69,12 +69,16 @@ export async function getWine(id: string) {
 
   const { data, error } = await supabase
     .from("wines")
-    .select("*, inventory_events(*)")
+    .select("*, inventory_events(*), tastings(*)")
     .eq("user_id", env.OWNER_USER_ID)
     .eq("id", id)
     .order("created_at", {
       ascending: false,
       foreignTable: "inventory_events",
+    })
+    .order("tasted_on", {
+      ascending: false,
+      foreignTable: "tastings",
     })
     .single();
 

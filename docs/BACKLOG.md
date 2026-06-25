@@ -66,6 +66,16 @@ they become active work.
   `app_users` owner (mirrors the table RLS already defined).
   - *Where:* Phase 6 (Release).
 
+## Future features (product)
+
+- **Voice-driven tasting capture.** Instead of typing on the wine detail page, the user speaks the
+  wine name + rating + tasting notes; the app transcribes, **fuzzy-matches the spoken wine to the
+  right cellar bottle**, and logs the tasting. Nicer during an actual tasting. Deferred from v1
+  because it needs speech capture (Web Speech API / a transcription provider) plus a wine-matching
+  step. v1 logs tastings manually on the detail page (Phase 4).
+  - *Where:* new capture flow feeding `POST /api/tastings`; also see the "Tasting Experience tab"
+    idea in PRD §6. Builds on Phase 4.
+
 ---
 
 ## Notes for upcoming phases (tracked elsewhere, listed here for visibility)
