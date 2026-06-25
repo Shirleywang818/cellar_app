@@ -3,7 +3,7 @@ import { env } from "@/lib/env";
 import type { RecommendationCandidate } from "@/lib/recommend";
 import {
   extractionOutputSchema,
-  recommendationResultSchema,
+  parseRecommendationResult,
   type ExtractionOutput,
   type RecommendationResult,
 } from "@/lib/schemas";
@@ -38,6 +38,29 @@ export type RecommendWinesResult = RecommendationResult & {
 
 function truncate(value: string, max = 2000) {
   return value.length > max ? `${value.slice(0, max)}…` : value;
+}
+
+// Guard the shared AI_REC_MODEL against a provider mismatch: if the configured model
+// id clearly doesn't belong to the active provider (e.g. a Gemini id while talking to
+// DeepSeek), fall back to that provider's known-good default instead of sending it.
+const REC_MODEL_DEFAULTS: Record<string, string> = {
+  gemini: "gemini-2.5-flash",
+  deepseek: "deepseek-chat",
+};
+
+function resolveRecModel(provider: string) {
+  const configured = env.AI_REC_MODEL;
+  if (configured.startsWith(provider)) {
+    return configured;
+  }
+  const fallback = REC_MODEL_DEFAULTS[provider];
+  if (fallback) {
+    console.warn(
+      `AI_REC_MODEL="${configured}" does not match provider "${provider}"; using "${fallback}".`,
+    );
+    return fallback;
+  }
+  return configured;
 }
 
 const EMPTY_EXTRACTION: ExtractionOutput = {
@@ -361,7 +384,7 @@ async function recommendWithDeepSeek(args: RecommendWinesArgs): Promise<Recommen
       Authorization: `Bearer ${env.DEEPSEEK_API_KEY}`,
     },
     body: JSON.stringify({
-      model: env.AI_REC_MODEL,
+      model: resolveRecModel("deepseek"),
       messages: [
         {
           role: "system",
@@ -397,11 +420,11 @@ async function recommendWithDeepSeek(args: RecommendWinesArgs): Promise<Recommen
   }
 
   const parsed = JSON.parse(text);
-  return recommendationResultSchema.parse(parsed);
+  return parseRecommendationResult(parsed);
 }
 
 async function recommendWithGemini(args: RecommendWinesArgs): Promise<RecommendationResult> {
-  const model = encodeURIComponent(env.AI_REC_MODEL);
+  const model = encodeURIComponent(resolveRecModel("gemini"));
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${env.GEMINI_API_KEY}`;
 
   const response = await fetch(url, {
@@ -448,5 +471,5 @@ async function recommendWithGemini(args: RecommendWinesArgs): Promise<Recommenda
   }
 
   const parsed = JSON.parse(text);
-  return recommendationResultSchema.parse(parsed);
+  return parseRecommendationResult(parsed);
 }

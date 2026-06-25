@@ -203,6 +203,43 @@ export const recommendationResultSchema = z.object({
 
 export type RecommendationResult = z.infer<typeof recommendationResultSchema>;
 
+// Lenient per-pick schema for parsing raw model output: a valid `wine_id` is the
+// only hard requirement (the route filters these against the candidate set anyway).
+// Cosmetic fields fall back to sane defaults instead of discarding the whole pick.
+const lenientRecommendationPickSchema = z.object({
+  wine_id: z.string().uuid(),
+  rank: z.number().int().min(1).catch(99),
+  fit_score: z.number().min(0).max(1).catch(0.5),
+  rationale: z.string().trim().min(1).catch("Recommended from your cellar."),
+});
+
+/**
+ * Parse a raw recommendation payload from any provider tolerantly: drop only the
+ * individual picks that lack a usable `wine_id`, keep the rest (max 3), and supply
+ * sensible defaults for `summary` / `no_strong_match` so a single malformed field
+ * can't force a full fallback.
+ */
+export function parseRecommendationResult(raw: unknown): RecommendationResult {
+  const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const rawPicks = Array.isArray(obj.picks) ? obj.picks : [];
+  const picks = rawPicks
+    .map((pick) => lenientRecommendationPickSchema.safeParse(pick))
+    .flatMap((parsed) => (parsed.success ? [parsed.data] : []))
+    .slice(0, 3);
+
+  const summary =
+    typeof obj.summary === "string" && obj.summary.trim().length > 0
+      ? obj.summary.trim()
+      : picks.length > 0
+        ? "Closest matches from your cellar."
+        : "No strong match was found in your cellar.";
+
+  const no_strong_match =
+    typeof obj.no_strong_match === "boolean" ? obj.no_strong_match : picks.length === 0;
+
+  return { picks, summary, no_strong_match };
+}
+
 export const acceptRecommendationSchema = z.object({
   accepted_wine_id: z.string().uuid(),
 });

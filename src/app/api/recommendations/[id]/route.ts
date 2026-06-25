@@ -16,15 +16,23 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     const input = acceptRecommendationSchema.parse(json);
     const supabase = createServiceClient();
 
-    const { data: wine, error: wineError } = await supabase
-      .from("wines")
-      .select("id")
+    const { data: recommendation, error: recError } = await supabase
+      .from("recommendations")
+      .select("result")
       .eq("user_id", env.OWNER_USER_ID)
-      .eq("id", input.accepted_wine_id)
+      .eq("id", id)
       .single();
 
-    if (wineError || !wine) {
-      return NextResponse.json({ error: "Accepted wine not found." }, { status: 404 });
+    if (recError || !recommendation) {
+      return NextResponse.json({ error: "Recommendation not found." }, { status: 404 });
+    }
+
+    const pickedWineIds = extractPickWineIds(recommendation.result);
+    if (!pickedWineIds.has(input.accepted_wine_id)) {
+      return NextResponse.json(
+        { error: "That wine was not one of this recommendation's picks." },
+        { status: 400 },
+      );
     }
 
     const { error } = await supabase
@@ -43,4 +51,22 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       error instanceof Error ? error.message : "Failed to accept recommendation.";
     return NextResponse.json({ error: message }, { status: 400 });
   }
+}
+
+function extractPickWineIds(result: unknown): Set<string> {
+  const ids = new Set<string>();
+  if (!result || typeof result !== "object") {
+    return ids;
+  }
+  const picks = (result as { picks?: unknown }).picks;
+  if (!Array.isArray(picks)) {
+    return ids;
+  }
+  for (const pick of picks) {
+    const wineId = (pick as { wine_id?: unknown })?.wine_id;
+    if (typeof wineId === "string") {
+      ids.add(wineId);
+    }
+  }
+  return ids;
 }
