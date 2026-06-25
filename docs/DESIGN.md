@@ -63,7 +63,7 @@ data, control cost, and add caching/rate limits.
 | **Database** | **Supabase Postgres** | Relational fit for cellar data; free tier; SQL + migrations. |
 | **Auth** | **Supabase Auth** | Email/OAuth ready; can run "open" for v1, enforced for release. |
 | **File storage** | **Supabase Storage** | Bottle photos; signed URLs; same vendor as DB/auth. |
-| **AI** | **Provider-agnostic gateway: hosted vision model + DeepSeek text models** | Cost-efficient default: use proven hosted vision for labels, DeepSeek for recommendation and preference text work, optional stronger fallback model for deep picks. |
+| **AI** | **Provider-agnostic gateway: hosted vision model + swappable text models** | Cost-efficient path: use proven hosted vision for labels, Gemini for Phase 3 recommendation testing, DeepSeek for recommendation and preference text work once billing is configured, optional stronger fallback model for deep picks. |
 | **Hosting** | **Vercel** (app) + **Supabase** (data) | Zero-ops, generous free tiers, instant deploys. |
 | **Validation** | **Zod** | One schema shared by AI output, API, and forms. |
 
