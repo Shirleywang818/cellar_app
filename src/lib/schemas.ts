@@ -60,6 +60,19 @@ export const inventoryEventSchema = z.object({
 
 export type InventoryEvent = z.infer<typeof inventoryEventSchema>;
 
+export const tastingSchema = z.object({
+  id: z.string().uuid(),
+  user_id: z.string().uuid(),
+  wine_id: z.string().uuid(),
+  rating: z.number().int().min(1).max(5).nullable(),
+  notes: z.string().nullable(),
+  paired_with: z.string().nullable(),
+  tasted_on: z.string(),
+  created_at: z.string(),
+});
+
+export type Tasting = z.infer<typeof tastingSchema>;
+
 export const wineDetailSchema = wineListItemSchema.extend({
   user_id: z.string().uuid(),
   varietals: z.array(z.string()),
@@ -74,6 +87,7 @@ export const wineDetailSchema = wineListItemSchema.extend({
   created_at: z.string(),
   updated_at: z.string(),
   inventory_events: z.array(inventoryEventSchema).default([]),
+  tastings: z.array(tastingSchema).default([]),
 });
 
 export type WineDetail = z.infer<typeof wineDetailSchema>;
@@ -160,6 +174,21 @@ export const createInventoryEventSchema = z.object({
 
 export type CreateInventoryEventInput = z.infer<typeof createInventoryEventSchema>;
 
+export const createTastingSchema = z
+  .object({
+    wine_id: z.string().uuid(),
+    rating: z.number().int().min(1).max(5).nullable().optional(),
+    notes: optionalTextSchema,
+    paired_with: optionalTextSchema,
+    tasted_on: optionalTextSchema,
+  })
+  .refine((value) => value.rating != null || value.notes != null, {
+    message: "Add a rating or notes before saving a tasting.",
+    path: ["rating"],
+  });
+
+export type CreateTastingInput = z.infer<typeof createTastingSchema>;
+
 const optionalNumberSchema = z
   .number()
   .min(0)
@@ -245,6 +274,28 @@ export const acceptRecommendationSchema = z.object({
 });
 
 export type AcceptRecommendationInput = z.infer<typeof acceptRecommendationSchema>;
+
+export const preferenceProfileSchema = z.object({
+  structured: z.record(z.string(), z.unknown()).default({}),
+  summary: z.string().default(""),
+  updated_at: z.string().nullable().optional(),
+});
+
+export type PreferenceProfile = z.infer<typeof preferenceProfileSchema>;
+
+export const preferenceProfileResultSchema = z.object({
+  structured: z.record(z.string(), z.unknown()).default({}),
+  summary: z.string().trim().min(1).catch("Taste profile is still learning from tastings."),
+});
+
+export type PreferenceProfileResult = z.infer<typeof preferenceProfileResultSchema>;
+
+export const updatePreferenceSchema = z.object({
+  summary: z.string().trim(),
+  structured: z.record(z.string(), z.unknown()).optional(),
+});
+
+export type UpdatePreferenceInput = z.infer<typeof updatePreferenceSchema>;
 
 export const extractWineResponseSchema = z.object({
   fields: extractionOutputSchema,

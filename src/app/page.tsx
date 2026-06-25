@@ -1,4 +1,4 @@
-import { Sparkles, Wine } from "lucide-react";
+import { Heart, Sparkles, Wine } from "lucide-react";
 import Link from "next/link";
 import { SearchFilterForm } from "@/components/search-filter-form";
 import { listWines } from "@/lib/cellar";
@@ -38,6 +38,13 @@ export default async function Home({ searchParams }: HomeProps) {
           </h1>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            className="inline-flex items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium shadow-sm"
+            href="/preferences"
+          >
+            <Heart aria-hidden="true" className="size-4" />
+            Preferences
+          </Link>
           <Link
             className="inline-flex items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium shadow-sm"
             href="/recommend"

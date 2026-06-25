@@ -2,6 +2,7 @@ import { ArrowLeft, Wine } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { InventoryControls } from "@/components/inventory-controls";
+import { TastingForm } from "@/components/tasting-form";
 import { WineEditForm } from "@/components/wine-edit-form";
 import { getWine } from "@/lib/cellar";
 import { formatPriceBand, formatWineTitle } from "@/lib/format";
@@ -67,9 +68,46 @@ export default async function WinePage({ params }: WinePageProps) {
       </header>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px] lg:items-start">
-        <WineEditForm wine={wine} />
+        <div className="grid gap-4">
+          <WineEditForm wine={wine} />
+          <section className="rounded-md border border-border bg-card p-4 shadow-sm">
+            <h2 className="text-lg font-semibold">Tastings</h2>
+            {wine.tastings.length === 0 ? (
+              <p className="mt-2 text-sm text-muted-foreground">
+                No tastings logged yet.
+              </p>
+            ) : (
+              <ol className="mt-3 grid gap-2">
+                {wine.tastings.map((tasting) => (
+                  <li
+                    className="rounded-md border border-border bg-background p-3 text-sm"
+                    key={tasting.id}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-medium">
+                        {tasting.rating ? `${tasting.rating}/5` : "No rating"}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {new Date(tasting.tasted_on).toLocaleDateString()}
+                      </span>
+                    </div>
+                    {tasting.paired_with ? (
+                      <p className="mt-1 text-muted-foreground">
+                        Paired with {tasting.paired_with}
+                      </p>
+                    ) : null}
+                    {tasting.notes ? (
+                      <p className="mt-2 leading-6">{tasting.notes}</p>
+                    ) : null}
+                  </li>
+                ))}
+              </ol>
+            )}
+          </section>
+        </div>
 
         <div className="grid gap-4">
+          <TastingForm wineId={wine.id} />
           <InventoryControls quantity={wine.quantity} wineId={wine.id} />
           <section className="rounded-md border border-border bg-card p-4 shadow-sm">
             <h2 className="text-lg font-semibold">History</h2>

@@ -4,7 +4,10 @@ import type { RecommendationCandidate } from "@/lib/recommend";
 import {
   extractionOutputSchema,
   parseRecommendationResult,
+  preferenceProfileResultSchema,
   type ExtractionOutput,
+  type PreferenceProfile,
+  type PreferenceProfileResult,
   type RecommendationResult,
 } from "@/lib/schemas";
 
@@ -36,6 +39,26 @@ export type RecommendWinesResult = RecommendationResult & {
   error: string | null;
 };
 
+export type UpdatePreferenceProfileArgs = {
+  currentProfile: PreferenceProfile;
+  tastings: Array<{
+    rating: number | null;
+    notes: string | null;
+    paired_with: string | null;
+    tasted_on: string;
+    wine: {
+      producer: string;
+      name: string;
+      vintage: number | null;
+      wine_type: string;
+      varietals: string[];
+      region: string | null;
+      country: string | null;
+      price_band: string | null;
+    } | null;
+  }>;
+};
+
 function truncate(value: string, max = 2000) {
   return value.length > max ? `${value.slice(0, max)}…` : value;
 }
@@ -57,6 +80,26 @@ function resolveRecModel(provider: string) {
   if (fallback) {
     console.warn(
       `AI_REC_MODEL="${configured}" does not match provider "${provider}"; using "${fallback}".`,
+    );
+    return fallback;
+  }
+  return configured;
+}
+
+const PREF_MODEL_DEFAULTS: Record<string, string> = {
+  gemini: "gemini-2.5-flash",
+  deepseek: "deepseek-v4-flash",
+};
+
+function resolvePrefModel(provider: string) {
+  const configured = env.AI_PREF_MODEL;
+  if (configured.startsWith(provider)) {
+    return configured;
+  }
+  const fallback = PREF_MODEL_DEFAULTS[provider];
+  if (fallback) {
+    console.warn(
+      `AI_PREF_MODEL="${configured}" does not match provider "${provider}"; using "${fallback}".`,
     );
     return fallback;
   }
@@ -137,6 +180,24 @@ const GEMINI_RECOMMENDATION_SCHEMA = {
     no_strong_match: { type: "BOOLEAN" },
   },
   required: ["picks", "summary", "no_strong_match"],
+};
+
+const GEMINI_PREFERENCE_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    structured: {
+      type: "OBJECT",
+      properties: {
+        likes: { type: "ARRAY", items: { type: "STRING" } },
+        dislikes: { type: "ARRAY", items: { type: "STRING" } },
+        favorite_regions: { type: "ARRAY", items: { type: "STRING" } },
+        favorite_varietals: { type: "ARRAY", items: { type: "STRING" } },
+        budget_norm: { type: "STRING", nullable: true },
+      },
+    },
+    summary: { type: "STRING" },
+  },
+  required: ["structured", "summary"],
 };
 
 const LABEL_PROMPT = `Extract wine label fields from this image.
@@ -306,11 +367,42 @@ export async function recommendWines(args: RecommendWinesArgs): Promise<Recommen
   }
 }
 
-export async function updatePreferenceProfile() {
-  return {
-    structured: {},
-    summary: "Preference learning is stubbed until Phase 4.",
-  };
+export async function updatePreferenceProfile(
+  args: UpdatePreferenceProfileArgs,
+): Promise<PreferenceProfileResult> {
+  if (args.tastings.length === 0) {
+    return {
+      structured: args.currentProfile.structured,
+      summary: args.currentProfile.summary,
+    };
+  }
+
+  if (env.AI_PREF_PROVIDER === "deepseek" && !env.DEEPSEEK_API_KEY) {
+    return {
+      structured: args.currentProfile.structured,
+      summary: args.currentProfile.summary,
+    };
+  }
+
+  if (env.AI_PREF_PROVIDER === "gemini" && !env.GEMINI_API_KEY) {
+    return {
+      structured: args.currentProfile.structured,
+      summary: args.currentProfile.summary,
+    };
+  }
+
+  try {
+    return await updatePreferenceWithRetry(args);
+  } catch (error) {
+    console.warn(
+      `${env.AI_PREF_PROVIDER} preference update fell back:`,
+      error instanceof Error ? error.message : error,
+    );
+    return {
+      structured: args.currentProfile.structured,
+      summary: args.currentProfile.summary,
+    };
+  }
 }
 
 async function recommendWithRetry(args: RecommendWinesArgs) {
@@ -472,4 +564,148 @@ async function recommendWithGemini(args: RecommendWinesArgs): Promise<Recommenda
 
   const parsed = JSON.parse(text);
   return parseRecommendationResult(parsed);
+}
+
+async function updatePreferenceWithRetry(args: UpdatePreferenceProfileArgs) {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      return await updatePreferenceWithProvider(args);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
+async function updatePreferenceWithProvider(args: UpdatePreferenceProfileArgs) {
+  if (env.AI_PREF_PROVIDER === "deepseek") {
+    return updatePreferenceWithDeepSeek(args);
+  }
+
+  if (env.AI_PREF_PROVIDER === "gemini") {
+    return updatePreferenceWithGemini(args);
+  }
+
+  throw new Error(`Preference provider "${env.AI_PREF_PROVIDER}" is not configured.`);
+}
+
+function buildPreferencePayload(args: UpdatePreferenceProfileArgs) {
+  return {
+    contract: {
+      structured: {
+        likes: ["preference signals the user likes"],
+        dislikes: ["preference signals the user dislikes"],
+        favorite_regions: ["regions or countries"],
+        favorite_varietals: ["grapes or blends"],
+        budget_norm: "brief budget tendency or null",
+      },
+      summary: "2-4 concise sentences describing the user's palate.",
+    },
+    rules: [
+      "Respect and evolve the current summary; do not discard manual edits wholesale.",
+      "Use only evidence from the provided tastings and current profile.",
+      "Mention uncertainty when the data is sparse.",
+      "Keep summary concise and useful for future wine recommendations.",
+    ],
+    current_profile: args.currentProfile,
+    recent_tastings: args.tastings,
+  };
+}
+
+async function updatePreferenceWithDeepSeek(
+  args: UpdatePreferenceProfileArgs,
+): Promise<PreferenceProfileResult> {
+  const response = await fetch("https://api.deepseek.com/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${env.DEEPSEEK_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: resolvePrefModel("deepseek"),
+      messages: [
+        {
+          role: "system",
+          content: "You update a user's wine preference memory from tasting notes. Return JSON only.",
+        },
+        {
+          role: "user",
+          content: JSON.stringify(buildPreferencePayload(args)),
+        },
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.2,
+      stream: false,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`DeepSeek preference update failed with ${response.status}: ${errorText}`);
+  }
+
+  const payload = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+  const text = payload.choices?.[0]?.message?.content;
+
+  if (!text) {
+    throw new Error("DeepSeek preference update returned no content.");
+  }
+
+  return preferenceProfileResultSchema.parse(JSON.parse(text));
+}
+
+async function updatePreferenceWithGemini(
+  args: UpdatePreferenceProfileArgs,
+): Promise<PreferenceProfileResult> {
+  const model = encodeURIComponent(resolvePrefModel("gemini"));
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${env.GEMINI_API_KEY}`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              text: [
+                "You update a user's wine preference memory from tasting notes.",
+                "Return strict JSON matching the response schema.",
+                JSON.stringify(buildPreferencePayload(args)),
+              ].join("\n\n"),
+            },
+          ],
+        },
+      ],
+      generationConfig: {
+        response_mime_type: "application/json",
+        response_schema: GEMINI_PREFERENCE_SCHEMA,
+        temperature: 0.2,
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Gemini preference update failed with ${response.status}: ${errorText}`);
+  }
+
+  const payload = (await response.json()) as {
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+  };
+  const text = payload.candidates?.[0]?.content?.parts?.[0]?.text;
+
+  if (!text) {
+    throw new Error("Gemini preference update returned no text.");
+  }
+
+  return preferenceProfileResultSchema.parse(JSON.parse(text));
 }
