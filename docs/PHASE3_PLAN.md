@@ -6,7 +6,9 @@
 **Goal:** the owner describes an occasion + cuisine + price range, and the app returns the **top 3**
 bottles **from their in-stock cellar** (within budget), each with a one-paragraph rationale and the
 price/band (or "unknown price"). #1 is highlighted. If nothing fits well, the app says so honestly.
-Replaces the `recommendWines` stub with a real DeepSeek call.
+Replaces the `recommendWines` stub with a real provider call. During Phase 3 testing, Gemini is
+the default recommendation provider because Gemini credits are already available; DeepSeek remains
+supported behind the same gateway once billing is configured.
 
 **Exit criteria:**
 - From the deployed app I can pick occasion + cuisine + budget and get up to 3 ranked picks with
@@ -22,7 +24,8 @@ Replaces the `recommendWines` stub with a real DeepSeek call.
 **In scope (Phase 3):**
 - Recommendation input UI: occasion (chips + free text), cuisine (chips + free text), price range.
 - `POST /api/recommendations` — assemble candidates, call DeepSeek, validate, log, return picks.
-- Real DeepSeek provider behind the existing `recommendWines` gateway function.
+- Real Gemini recommendation provider behind the existing `recommendWines` gateway function, with
+  DeepSeek still available via env config.
 - Results UI: ranked cards (#1 highlighted), rationale, price/band, link to detail, no-match state.
 - **Accept** a recommendation → record `accepted_wine_id`; optional "mark opened" → `consume -1`
   via the existing inventory endpoint (`source = recommendation_accept`).
@@ -37,12 +40,12 @@ Replaces the `recommendWines` stub with a real DeepSeek call.
 
 ## Prerequisites (before coding)
 
-1. **`DEEPSEEK_API_KEY`** in `.env.local` and Vercel.
-2. **Confirm DeepSeek env values.** DeepSeek's API is OpenAI-compatible
-   (`https://api.deepseek.com`). Use **`deepseek-v4-flash`** as the default `AI_REC_MODEL`
-   and `AI_PREF_MODEL`. Reserve `deepseek-v4-pro` for a future deep-pick mode.
-   `deepseek-chat` / `deepseek-reasoner` are compatibility aliases and should not be used for new
-   code because DeepSeek lists them for deprecation on 2026-07-24.
+1. **`GEMINI_API_KEY`** in `.env.local` and Vercel.
+2. **Confirm recommendation env values for Phase 3 testing:**
+   `AI_REC_PROVIDER=gemini`, `AI_REC_MODEL=gemini-2.5-flash`.
+3. DeepSeek remains supported for later cost testing. Use `AI_REC_PROVIDER=deepseek`,
+   `AI_REC_MODEL=deepseek-v4-flash` once DeepSeek API billing is configured. Reserve
+   `deepseek-v4-pro` for a future deep-pick mode.
 
 ---
 
@@ -81,8 +84,8 @@ Replace the stub `recommendWines` with:
 recommendWines({ occasion, cuisine, budget, candidates, preferenceSummary })
   -> { picks: [{ wine_id, rank, fit_score, rationale }], summary, no_strong_match }
 ```
-- DeepSeek via OpenAI-compatible Chat Completions, `response_format: { type: "json_object" }`,
-  low temperature.
+- Gemini via `generateContent` JSON mode for Phase 3 testing. DeepSeek remains available via
+  OpenAI-compatible Chat Completions, `response_format: { type: "json_object" }`, low temperature.
 - Prompt rules (DESIGN §6.2): pick **only** from the provided candidate ids; return **at most 3**;
   rank best-first with `fit_score` 0–1; explain fit to food + occasion + (if given) the owner's
   taste; **if nothing is a strong fit, set `no_strong_match: true`** and return the closest option
@@ -132,7 +135,7 @@ recommendWines({ occasion, cuisine, budget, candidates, preferenceSummary })
 
 ---
 
-## Prompt design (DeepSeek)
+## Prompt design
 
 - **System:** "You are a sommelier recommending from a fixed list of bottles the user owns. Only
   choose from the provided candidates by `id`. Never invent wines."
@@ -171,8 +174,8 @@ recommendWines({ occasion, cuisine, budget, candidates, preferenceSummary })
 
 ## Suggested build order
 
-1. Set `DEEPSEEK_API_KEY`; confirm `AI_REC_MODEL=deepseek-v4-flash` and
-   `AI_PREF_MODEL=deepseek-v4-flash` locally and in Vercel.
+1. Confirm `GEMINI_API_KEY`, `AI_REC_PROVIDER=gemini`, and
+   `AI_REC_MODEL=gemini-2.5-flash` locally and in Vercel.
 2. Candidate assembly + budget filter (`src/lib/recommend.ts`) with unit tests.
 3. Real `recommendWines` in the gateway (DeepSeek JSON + Zod + retry).
 4. `POST /api/recommendations` (assemble → model → validate picks → log).

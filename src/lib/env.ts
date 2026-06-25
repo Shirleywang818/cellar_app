@@ -15,8 +15,8 @@ const envSchema = z.object({
   ANTHROPIC_API_KEY: z.string().optional(),
   AI_LABEL_PROVIDER: z.string().default("gemini"),
   AI_LABEL_MODEL: z.string().default("gemini-2.5-flash"),
-  AI_REC_PROVIDER: z.string().default("deepseek"),
-  AI_REC_MODEL: z.string().default("deepseek-v4-flash"),
+  AI_REC_PROVIDER: z.string().default("gemini"),
+  AI_REC_MODEL: z.string().default("gemini-2.5-flash"),
   AI_PREF_PROVIDER: z.string().default("deepseek"),
   AI_PREF_MODEL: z.string().default("deepseek-v4-flash"),
 });

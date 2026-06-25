@@ -94,6 +94,28 @@ const GEMINI_EXTRACTION_SCHEMA = {
   ],
 };
 
+const GEMINI_RECOMMENDATION_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    picks: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          wine_id: { type: "STRING" },
+          rank: { type: "INTEGER" },
+          fit_score: { type: "NUMBER" },
+          rationale: { type: "STRING" },
+        },
+        required: ["wine_id", "rank", "fit_score", "rationale"],
+      },
+    },
+    summary: { type: "STRING" },
+    no_strong_match: { type: "BOOLEAN" },
+  },
+  required: ["picks", "summary", "no_strong_match"],
+};
+
 const LABEL_PROMPT = `Extract wine label fields from this image.
 
 Return only JSON matching the schema.
@@ -226,17 +248,7 @@ export async function recommendWines(args: RecommendWinesArgs): Promise<Recommen
     };
   }
 
-  if (env.AI_REC_PROVIDER !== "deepseek") {
-    return {
-      picks: [],
-      summary: `Recommendation provider "${env.AI_REC_PROVIDER}" is not configured.`,
-      no_strong_match: true,
-      fallback: true,
-      error: `recommendation provider "${env.AI_REC_PROVIDER}" not configured`,
-    };
-  }
-
-  if (!env.DEEPSEEK_API_KEY) {
+  if (env.AI_REC_PROVIDER === "deepseek" && !env.DEEPSEEK_API_KEY) {
     return {
       picks: [],
       summary: "DeepSeek is not configured yet. Add DEEPSEEK_API_KEY to enable recommendations.",
@@ -246,11 +258,21 @@ export async function recommendWines(args: RecommendWinesArgs): Promise<Recommen
     };
   }
 
+  if (env.AI_REC_PROVIDER === "gemini" && !env.GEMINI_API_KEY) {
+    return {
+      picks: [],
+      summary: "Gemini is not configured yet. Add GEMINI_API_KEY to enable recommendations.",
+      no_strong_match: true,
+      fallback: true,
+      error: "missing GEMINI_API_KEY",
+    };
+  }
+
   try {
     return await recommendWithRetry(args);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.warn("DeepSeek recommendation fell back:", message);
+    console.warn(`${env.AI_REC_PROVIDER} recommendation fell back:`, message);
     return {
       picks: [],
       summary: "Could not generate recommendations right now. Please try again.",
@@ -273,7 +295,7 @@ async function recommendWithRetry(args: RecommendWinesArgs) {
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      const result = await recommendWithDeepSeek(args);
+      const result = await recommendWithProvider(args);
       return {
         ...result,
         fallback: false,
@@ -285,6 +307,50 @@ async function recommendWithRetry(args: RecommendWinesArgs) {
   }
 
   throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
+async function recommendWithProvider(args: RecommendWinesArgs) {
+  if (env.AI_REC_PROVIDER === "deepseek") {
+    return recommendWithDeepSeek(args);
+  }
+
+  if (env.AI_REC_PROVIDER === "gemini") {
+    return recommendWithGemini(args);
+  }
+
+  throw new Error(`Recommendation provider "${env.AI_REC_PROVIDER}" is not configured.`);
+}
+
+function buildRecommendationPayload(args: RecommendWinesArgs) {
+  return {
+    contract: {
+      picks: [
+        {
+          wine_id: "candidate uuid",
+          rank: 1,
+          fit_score: 0.86,
+          rationale: "one paragraph",
+        },
+      ],
+      summary: "short overall summary",
+      no_strong_match: false,
+    },
+    rules: [
+      "Return at most 3 picks, ranked best-first.",
+      "Use only candidate ids from candidates[].id.",
+      "fit_score must be between 0 and 1.",
+      "Explain the fit to cuisine, occasion, and preference_summary when available.",
+      "Respect the requested budget. Unknown-price wines may be suggested, but call out the unknown price in the rationale.",
+      "If nothing is a strong fit, set no_strong_match true and return the closest option with an honest caveat.",
+    ],
+    request: {
+      occasion: args.occasion,
+      cuisine: args.cuisine,
+      budget: args.budget,
+      preference_summary: args.preferenceSummary,
+      candidates: args.candidates,
+    },
+  };
 }
 
 async function recommendWithDeepSeek(args: RecommendWinesArgs): Promise<RecommendationResult> {
@@ -307,35 +373,7 @@ async function recommendWithDeepSeek(args: RecommendWinesArgs): Promise<Recommen
         },
         {
           role: "user",
-          content: JSON.stringify({
-            contract: {
-              picks: [
-                {
-                  wine_id: "candidate uuid",
-                  rank: 1,
-                  fit_score: 0.86,
-                  rationale: "one paragraph",
-                },
-              ],
-              summary: "short overall summary",
-              no_strong_match: false,
-            },
-            rules: [
-              "Return at most 3 picks, ranked best-first.",
-              "Use only candidate ids from candidates[].id.",
-              "fit_score must be between 0 and 1.",
-              "Explain the fit to cuisine, occasion, and preference_summary when available.",
-              "Respect the requested budget. Unknown-price wines may be suggested, but call out the unknown price in the rationale.",
-              "If nothing is a strong fit, set no_strong_match true and return the closest option with an honest caveat.",
-            ],
-            request: {
-              occasion: args.occasion,
-              cuisine: args.cuisine,
-              budget: args.budget,
-              preference_summary: args.preferenceSummary,
-              candidates: args.candidates,
-            },
-          }),
+          content: JSON.stringify(buildRecommendationPayload(args)),
         },
       ],
       response_format: { type: "json_object" },
@@ -356,6 +394,57 @@ async function recommendWithDeepSeek(args: RecommendWinesArgs): Promise<Recommen
 
   if (!text) {
     throw new Error("DeepSeek recommendation returned no content.");
+  }
+
+  const parsed = JSON.parse(text);
+  return recommendationResultSchema.parse(parsed);
+}
+
+async function recommendWithGemini(args: RecommendWinesArgs): Promise<RecommendationResult> {
+  const model = encodeURIComponent(env.AI_REC_MODEL);
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${env.GEMINI_API_KEY}`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              text: [
+                "You are a sommelier recommending from a fixed list of bottles the user owns.",
+                "Only choose from the provided candidate ids. Never invent wines.",
+                "Return strict JSON matching the response schema.",
+                JSON.stringify(buildRecommendationPayload(args)),
+              ].join("\n\n"),
+            },
+          ],
+        },
+      ],
+      generationConfig: {
+        response_mime_type: "application/json",
+        response_schema: GEMINI_RECOMMENDATION_SCHEMA,
+        temperature: 0.2,
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Gemini recommendation failed with ${response.status}: ${errorText}`);
+  }
+
+  const payload = (await response.json()) as {
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+  };
+  const text = payload.candidates?.[0]?.content?.parts?.[0]?.text;
+
+  if (!text) {
+    throw new Error("Gemini recommendation returned no text.");
   }
 
   const parsed = JSON.parse(text);
