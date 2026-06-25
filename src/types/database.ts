@@ -63,7 +63,7 @@ export type Database = {
           id: string;
           user_id: string;
           wine_id: string;
-          event_type: "purchase" | "adjustment" | "consume" | "remove";
+          event_type: "purchase" | "adjustment" | "consume";
           quantity_delta: number;
           note: string | null;
           source: string | null;
@@ -76,6 +76,40 @@ export type Database = {
           >;
         Update: Partial<Database["public"]["Tables"]["inventory_events"]["Row"]>;
       };
+      preference_profiles: {
+        Row: {
+          user_id: string;
+          structured: Json;
+          summary: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          structured?: Json;
+          summary?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["preference_profiles"]["Row"]>;
+      };
+      recommendations: {
+        Row: {
+          id: string;
+          user_id: string;
+          occasion: string;
+          cuisine: string;
+          budget_min: number | null;
+          budget_max: number | null;
+          result: Json;
+          accepted_wine_id: string | null;
+          created_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["recommendations"]["Row"]> &
+          Pick<
+            Database["public"]["Tables"]["recommendations"]["Row"],
+            "user_id" | "occasion" | "cuisine" | "result"
+          >;
+        Update: Partial<Database["public"]["Tables"]["recommendations"]["Row"]>;
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -83,7 +117,7 @@ export type Database = {
         Args: {
           p_user_id: string;
           p_wine_id: string;
-          p_event_type: "purchase" | "adjustment" | "consume" | "remove";
+          p_event_type: "purchase" | "adjustment" | "consume";
           p_quantity_delta: number;
           p_note?: string | null;
           p_source?: string | null;

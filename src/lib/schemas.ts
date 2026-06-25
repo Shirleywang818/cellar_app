@@ -16,7 +16,6 @@ export const inventoryEventTypeSchema = z.enum([
   "purchase",
   "adjustment",
   "consume",
-  "remove",
 ]);
 
 export type InventoryEventType = z.infer<typeof inventoryEventTypeSchema>;
@@ -160,6 +159,55 @@ export const createInventoryEventSchema = z.object({
 });
 
 export type CreateInventoryEventInput = z.infer<typeof createInventoryEventSchema>;
+
+const optionalNumberSchema = z
+  .number()
+  .min(0)
+  .nullable()
+  .optional();
+
+export const createRecommendationSchema = z
+  .object({
+    occasion: z.string().trim().min(1, "Occasion is required."),
+    cuisine: z.string().trim().min(1, "Cuisine is required."),
+    budget_min: optionalNumberSchema,
+    budget_max: optionalNumberSchema,
+  })
+  .refine(
+    (value) =>
+      value.budget_min == null ||
+      value.budget_max == null ||
+      value.budget_min <= value.budget_max,
+    {
+      message: "Minimum budget must be less than or equal to maximum budget.",
+      path: ["budget_min"],
+    },
+  );
+
+export type CreateRecommendationInput = z.infer<typeof createRecommendationSchema>;
+
+export const recommendationPickSchema = z.object({
+  wine_id: z.string().uuid(),
+  rank: z.number().int().min(1),
+  fit_score: z.number().min(0).max(1),
+  rationale: z.string().trim().min(1),
+});
+
+export type RecommendationPick = z.infer<typeof recommendationPickSchema>;
+
+export const recommendationResultSchema = z.object({
+  picks: z.array(recommendationPickSchema).max(3),
+  summary: z.string().trim().min(1),
+  no_strong_match: z.boolean(),
+});
+
+export type RecommendationResult = z.infer<typeof recommendationResultSchema>;
+
+export const acceptRecommendationSchema = z.object({
+  accepted_wine_id: z.string().uuid(),
+});
+
+export type AcceptRecommendationInput = z.infer<typeof acceptRecommendationSchema>;
 
 export const extractWineResponseSchema = z.object({
   fields: extractionOutputSchema,

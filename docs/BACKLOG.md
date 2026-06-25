@@ -52,6 +52,13 @@ they become active work.
 - **List signs a URL per wine per load.** Fine for tens–hundreds of bottles; if the cellar grows,
   batch/caches signed URLs or add pagination. *Where:* `src/lib/cellar.ts`.
 
+## Schema tidy (optional)
+
+- **Tighten `inventory_events` CHECK constraint to drop `remove`.** v1 uses hard delete and never
+  emits a `remove` event; app-layer types already exclude it, but the Phase 2 migration's CHECK
+  still permits `purchase|adjustment|consume|remove`. Optional new migration to `alter` the
+  constraint to the three active types. Purely cosmetic — no behavior depends on it.
+
 ## Security (release-time)
 
 - **Storage RLS policies.** The bucket is private and only reached via the service-role BFF, so v1

@@ -1,6 +1,12 @@
 import "server-only";
 import { env } from "@/lib/env";
-import { extractionOutputSchema, type ExtractionOutput } from "@/lib/schemas";
+import type { RecommendationCandidate } from "@/lib/recommend";
+import {
+  extractionOutputSchema,
+  recommendationResultSchema,
+  type ExtractionOutput,
+  type RecommendationResult,
+} from "@/lib/schemas";
 
 type ExtractWineLabelArgs = {
   imageBytes: Buffer;
@@ -10,6 +16,22 @@ type ExtractWineLabelArgs = {
 export type ExtractWineLabelResult = {
   fields: ExtractionOutput;
   raw_text: string | null;
+  fallback: boolean;
+  error: string | null;
+};
+
+export type RecommendWinesArgs = {
+  occasion: string;
+  cuisine: string;
+  budget: {
+    min: number | null;
+    max: number | null;
+  };
+  candidates: RecommendationCandidate[];
+  preferenceSummary: string;
+};
+
+export type RecommendWinesResult = RecommendationResult & {
   fallback: boolean;
   error: string | null;
 };
@@ -193,11 +215,50 @@ export function getLabelExtractionMeta(result: ExtractWineLabelResult) {
   };
 }
 
-export async function recommendWines() {
-  return {
-    picks: [],
-    summary: "AI recommendation is stubbed until Phase 3.",
-  };
+export async function recommendWines(args: RecommendWinesArgs): Promise<RecommendWinesResult> {
+  if (args.candidates.length === 0) {
+    return {
+      picks: [],
+      summary: "No in-stock cellar candidates matched this request.",
+      no_strong_match: true,
+      fallback: false,
+      error: null,
+    };
+  }
+
+  if (env.AI_REC_PROVIDER !== "deepseek") {
+    return {
+      picks: [],
+      summary: `Recommendation provider "${env.AI_REC_PROVIDER}" is not configured.`,
+      no_strong_match: true,
+      fallback: true,
+      error: `recommendation provider "${env.AI_REC_PROVIDER}" not configured`,
+    };
+  }
+
+  if (!env.DEEPSEEK_API_KEY) {
+    return {
+      picks: [],
+      summary: "DeepSeek is not configured yet. Add DEEPSEEK_API_KEY to enable recommendations.",
+      no_strong_match: true,
+      fallback: true,
+      error: "missing DEEPSEEK_API_KEY",
+    };
+  }
+
+  try {
+    return await recommendWithRetry(args);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn("DeepSeek recommendation fell back:", message);
+    return {
+      picks: [],
+      summary: "Could not generate recommendations right now. Please try again.",
+      no_strong_match: true,
+      fallback: true,
+      error: truncate(message, 300),
+    };
+  }
 }
 
 export async function updatePreferenceProfile() {
@@ -205,4 +266,98 @@ export async function updatePreferenceProfile() {
     structured: {},
     summary: "Preference learning is stubbed until Phase 4.",
   };
+}
+
+async function recommendWithRetry(args: RecommendWinesArgs) {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const result = await recommendWithDeepSeek(args);
+      return {
+        ...result,
+        fallback: false,
+        error: null,
+      };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
+async function recommendWithDeepSeek(args: RecommendWinesArgs): Promise<RecommendationResult> {
+  const response = await fetch("https://api.deepseek.com/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${env.DEEPSEEK_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: env.AI_REC_MODEL,
+      messages: [
+        {
+          role: "system",
+          content: [
+            "You are a sommelier recommending from a fixed list of bottles the user owns.",
+            "Only choose from the provided candidate ids. Never invent wines.",
+            "Return strict JSON only.",
+          ].join(" "),
+        },
+        {
+          role: "user",
+          content: JSON.stringify({
+            contract: {
+              picks: [
+                {
+                  wine_id: "candidate uuid",
+                  rank: 1,
+                  fit_score: 0.86,
+                  rationale: "one paragraph",
+                },
+              ],
+              summary: "short overall summary",
+              no_strong_match: false,
+            },
+            rules: [
+              "Return at most 3 picks, ranked best-first.",
+              "Use only candidate ids from candidates[].id.",
+              "fit_score must be between 0 and 1.",
+              "Explain the fit to cuisine, occasion, and preference_summary when available.",
+              "Respect the requested budget. Unknown-price wines may be suggested, but call out the unknown price in the rationale.",
+              "If nothing is a strong fit, set no_strong_match true and return the closest option with an honest caveat.",
+            ],
+            request: {
+              occasion: args.occasion,
+              cuisine: args.cuisine,
+              budget: args.budget,
+              preference_summary: args.preferenceSummary,
+              candidates: args.candidates,
+            },
+          }),
+        },
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.2,
+      stream: false,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`DeepSeek recommendation failed with ${response.status}: ${errorText}`);
+  }
+
+  const payload = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+  const text = payload.choices?.[0]?.message?.content;
+
+  if (!text) {
+    throw new Error("DeepSeek recommendation returned no content.");
+  }
+
+  const parsed = JSON.parse(text);
+  return recommendationResultSchema.parse(parsed);
 }
