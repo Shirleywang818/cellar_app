@@ -508,7 +508,7 @@ async function downscaleImage(file: File) {
     const maxDimension = 1600;
     const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
 
-    if (scale === 1 && file.size <= 2_500_000) {
+    if (!heic && scale === 1 && file.size <= 2_500_000) {
       return file;
     }
 

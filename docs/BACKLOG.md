@@ -34,6 +34,21 @@ they become active work.
 - **List signs a URL per wine per load.** Fine for tens–hundreds of bottles; if the cellar grows,
   batch/caches signed URLs or add pagination. *Where:* `src/lib/cellar.ts`.
 
+## PWA (Phase 5 follow-ups)
+
+- **Service worker is hand-rolled, not Serwist (Phase 5 decision deviation).** The confirmed Phase 5
+  decision was a minimal SW via **Serwist**; v1 ships a hand-rolled `public/sw.js` to keep it simple
+  (fewer deps). It precaches the static shell URLs but **not** the hashed `/_next/static/*` bundles,
+  so a truly cold first-load while offline won't fully render (after one online visit, runtime
+  caching covers it). Acceptable for v1. Follow-up: migrate to **Serwist** for build-time precaching
+  of the real asset manifest if proper offline support is wanted.
+  - *Where:* `public/sw.js`, `src/components/service-worker-register.tsx`.
+
+- **Daily-cap check runs after the temp photo upload.** In the extract flow `assertAiDailyLimit`
+  fires inside `extractWineLabel`, which runs after the route uploads the `pending/` image — so a
+  capped extraction leaves an orphaned upload. Low impact; check the cap before upload if tightening.
+  - *Where:* `src/app/api/wines/extract/route.ts`, `src/lib/ai/gateway.ts`.
+
 ## Schema tidy (optional)
 
 - **Tighten `inventory_events` CHECK constraint to drop `remove`.** v1 uses hard delete and never
@@ -71,4 +86,5 @@ they become active work.
 
 - **Phase 5:** AI extraction retry on transient Gemini errors.
 - **Phase 5:** HEIC/HEIF capture failure now stops before upload with clear user-facing guidance.
+- **Phase 5:** small HEIC files no longer skip conversion via the downscale early-return (`!heic` guard).
 - **Phase 5:** Wine delete now removes the referenced label image as best-effort cleanup.
