@@ -16,17 +16,16 @@ calls. This is the last phase before Phase 6 (Release).
 
 ---
 
-## Decisions to confirm
+## Decisions (confirmed)
 
-1. **Service worker / offline scope.** Recommend a **minimal** SW: precache the app shell + static
-   assets, network-first for data (cellar/recs are inherently online). Full offline-first sync is
-   explicitly out of scope (PRD N5). Library: **Serwist** (maintained `next-pwa` successor) for App
-   Router. *Confirm: minimal SW now, or stay manifest-only and defer SW entirely?*
-2. **Mobile navigation.** Recommend adding a persistent **bottom tab bar** (Cellar · Add ·
-   Recommend · Preferences) for a native-feel installed app. *Confirm or keep header links.*
-3. **Cost guardrail strength.** Recommend structured AI logging + a simple **daily call cap**
-   (env-configurable) that returns a friendly "try again later" when exceeded. *Confirm whether a
-   hard cap is wanted in v1 or logging-only.*
+1. **Service worker / offline scope — minimal SW.** Precache the app shell + static assets,
+   network-first for data (cellar/recs are inherently online). Full offline-first sync stays out of
+   scope (PRD N5). Use a lightweight manual service worker for v1 to avoid adding a dependency;
+   register in production only.
+2. **Mobile navigation — persistent bottom tab bar** (Cellar · Add · Recommend · Preferences) for a
+   native-feel installed app.
+3. **Cost guardrail — logging + a hard daily cap.** Structured AI logging plus an env-configurable
+   daily call cap that returns a friendly "try again later" (no provider call) when exceeded.
 
 ---
 
@@ -56,7 +55,7 @@ calls. This is the last phase before Phase 6 (Release).
   `start_url`; add the icon entries with `purpose`.
 - **iOS support:** `apple-mobile-web-app-capable`, `apple-mobile-web-app-status-bar-style`,
   `apple-touch-icon` links (iOS ignores the manifest icons for the home-screen icon).
-- **Service worker (if confirmed):** Serwist precache of the app shell + static assets; network-first
+- **Service worker:** lightweight manual SW precaches the app shell + static assets; network-first
   for API/data; offline fallback page. Register only in production.
 - **Install prompt:** capture `beforeinstallprompt` (Chrome) for an "Add to home screen" button;
   show iOS users the manual "Share → Add to Home Screen" hint (no programmatic prompt on iOS).

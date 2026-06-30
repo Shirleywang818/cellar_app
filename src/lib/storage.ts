@@ -87,3 +87,18 @@ export async function createSignedLabelUrl(photoPath: string | null) {
 
   return data.signedUrl;
 }
+
+export async function deleteLabelImage(photoPath: string | null | undefined) {
+  if (!photoPath) {
+    return;
+  }
+
+  const supabase = createServiceClient();
+  const { error } = await supabase.storage
+    .from(env.SUPABASE_STORAGE_BUCKET)
+    .remove([photoPath]);
+
+  if (error) {
+    console.warn(`Failed to delete label image ${photoPath}:`, error.message);
+  }
+}

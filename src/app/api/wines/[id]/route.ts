@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { env } from "@/lib/env";
 import { derivePriceBand } from "@/lib/price";
 import { updateWineSchema } from "@/lib/schemas";
+import { deleteLabelImage } from "@/lib/storage";
 import { createServiceClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -80,6 +81,14 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
   try {
     const { id } = await params;
     const supabase = createServiceClient();
+
+    const { data: wine } = await supabase
+      .from("wines")
+      .select("photo_path")
+      .eq("user_id", env.OWNER_USER_ID)
+      .eq("id", id)
+      .maybeSingle();
+
     const { error } = await supabase
       .from("wines")
       .delete()
@@ -89,6 +98,8 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
     if (error) {
       throw new Error(error.message);
     }
+
+    await deleteLabelImage(wine?.photo_path);
 
     return NextResponse.json({ ok: true });
   } catch (error) {

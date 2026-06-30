@@ -71,7 +71,14 @@ export default async function Home({ searchParams }: HomeProps) {
       <section className="grid gap-3">
         {wines.length === 0 ? (
           <div className="rounded-md border border-border bg-card p-5 text-sm text-muted-foreground">
-            No wines found. Add a bottle to start your cellar.
+            <p>No wines found.</p>
+            <Link
+              className="mt-3 inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-sm"
+              href="/add"
+            >
+              <Wine aria-hidden="true" className="size-4" />
+              Add a bottle
+            </Link>
           </div>
         ) : (
           wines.map((wine) => (

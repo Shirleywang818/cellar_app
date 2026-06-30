@@ -13,6 +13,7 @@ const envSchema = z.object({
   GEMINI_API_KEY: z.string().optional(),
   DEEPSEEK_API_KEY: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
+  AI_DAILY_CALL_LIMIT: z.coerce.number().int().min(0).default(50),
   AI_LABEL_PROVIDER: z.string().default("gemini"),
   AI_LABEL_MODEL: z.string().default("gemini-2.5-flash"),
   AI_REC_PROVIDER: z.string().default("gemini"),

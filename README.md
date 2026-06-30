@@ -27,6 +27,7 @@ In the Supabase dashboard, open **SQL Editor** and run:
 1. `supabase/migrations/20260622000000_phase0_schema.sql`
 2. `supabase/seed.sql`
 3. `supabase/migrations/20260623000000_phase2_inventory_events.sql`
+4. `supabase/migrations/20260629000000_phase5_ai_call_logs.sql`
 
 The v1 auth posture uses a fixed `OWNER_USER_ID` and service-role BFF access. The browser should
 never receive `SUPABASE_SERVICE_ROLE_KEY`.

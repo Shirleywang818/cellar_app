@@ -1,4 +1,10 @@
 import "server-only";
+import {
+  AiDailyLimitError,
+  assertAiDailyLimit,
+  compactErrorReason,
+  logAiCall,
+} from "@/lib/ai/guardrails";
 import { env } from "@/lib/env";
 import type { RecommendationCandidate } from "@/lib/recommend";
 import {
@@ -224,6 +230,14 @@ export async function extractWineLabel({
   }
 
   if (!env.GEMINI_API_KEY) {
+    await logAiCall({
+      feature: "label_extraction",
+      provider: env.AI_LABEL_PROVIDER,
+      model: env.AI_LABEL_MODEL,
+      status: "fallback",
+      fallback: true,
+      errorReason: "missing GEMINI_API_KEY",
+    });
     return {
       fields: EMPTY_EXTRACTION,
       raw_text: null,
@@ -233,11 +247,43 @@ export async function extractWineLabel({
   }
 
   try {
+    await assertAiDailyLimit("label_extraction");
+  } catch (error) {
+    if (error instanceof AiDailyLimitError) {
+      return {
+        fields: EMPTY_EXTRACTION,
+        raw_text: null,
+        fallback: true,
+        error: "Daily AI call limit reached. Try again tomorrow.",
+      };
+    }
+    throw error;
+  }
+
+  const startedAt = Date.now();
+  try {
     const { fields, rawText } = await extractWithGemini(imageBytes, mimeType);
+    await logAiCall({
+      feature: "label_extraction",
+      provider: env.AI_LABEL_PROVIDER,
+      model: env.AI_LABEL_MODEL,
+      status: "success",
+      latencyMs: Date.now() - startedAt,
+      fallback: false,
+    });
     return { fields, raw_text: truncate(rawText), fallback: false, error: null };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = compactErrorReason(error);
     console.warn("Gemini label extraction fell back to manual entry:", message);
+    await logAiCall({
+      feature: "label_extraction",
+      provider: env.AI_LABEL_PROVIDER,
+      model: env.AI_LABEL_MODEL,
+      status: "fallback",
+      latencyMs: Date.now() - startedAt,
+      fallback: true,
+      errorReason: message,
+    });
     return {
       fields: EMPTY_EXTRACTION,
       raw_text: null,
@@ -263,51 +309,70 @@ export function isEmptyExtraction(fields: ExtractionOutput) {
 async function extractWithGemini(imageBytes: Buffer, mimeType: string) {
   const model = encodeURIComponent(env.AI_LABEL_MODEL);
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${env.GEMINI_API_KEY}`;
+  let lastErrorText = "";
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { text: LABEL_PROMPT },
-            {
-              inline_data: {
-                mime_type: mimeType,
-                data: imageBytes.toString("base64"),
-              },
-            },
-          ],
-        },
-      ],
-      generationConfig: {
-        response_mime_type: "application/json",
-        response_schema: GEMINI_EXTRACTION_SCHEMA,
-        temperature: 0.1,
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
       },
-    }),
+      body: JSON.stringify({
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: LABEL_PROMPT },
+              {
+                inline_data: {
+                  mime_type: mimeType,
+                  data: imageBytes.toString("base64"),
+                },
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          response_mime_type: "application/json",
+          response_schema: GEMINI_EXTRACTION_SCHEMA,
+          temperature: 0.1,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      lastErrorText = await response.text();
+      if (attempt === 0 && shouldRetryStatus(response.status)) {
+        await sleep(600);
+        continue;
+      }
+      throw new Error(`Gemini extraction failed with ${response.status}: ${lastErrorText}`);
+    }
+
+    const payload = (await response.json()) as {
+      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+    };
+    const text = payload.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!text) {
+      throw new Error("Gemini extraction returned no text.");
+    }
+
+    const parsed = JSON.parse(text);
+    return { fields: extractionOutputSchema.parse(parsed), rawText: text };
+  }
+
+  throw new Error(`Gemini extraction failed after retry: ${lastErrorText}`);
+}
+
+function shouldRetryStatus(status: number) {
+  return status === 429 || status >= 500;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
   });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Gemini extraction failed with ${response.status}: ${errorText}`);
-  }
-
-  const payload = (await response.json()) as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-  };
-  const text = payload.candidates?.[0]?.content?.parts?.[0]?.text;
-
-  if (!text) {
-    throw new Error("Gemini extraction returned no text.");
-  }
-
-  const parsed = JSON.parse(text);
-  return { fields: extractionOutputSchema.parse(parsed), rawText: text };
 }
 
 export function getLabelExtractionMeta(result: ExtractWineLabelResult) {
@@ -333,6 +398,14 @@ export async function recommendWines(args: RecommendWinesArgs): Promise<Recommen
   }
 
   if (env.AI_REC_PROVIDER === "deepseek" && !env.DEEPSEEK_API_KEY) {
+    await logAiCall({
+      feature: "recommendation",
+      provider: env.AI_REC_PROVIDER,
+      model: resolveRecModel(env.AI_REC_PROVIDER),
+      status: "fallback",
+      fallback: true,
+      errorReason: "missing DEEPSEEK_API_KEY",
+    });
     return {
       picks: [],
       summary: "DeepSeek is not configured yet. Add DEEPSEEK_API_KEY to enable recommendations.",
@@ -343,6 +416,14 @@ export async function recommendWines(args: RecommendWinesArgs): Promise<Recommen
   }
 
   if (env.AI_REC_PROVIDER === "gemini" && !env.GEMINI_API_KEY) {
+    await logAiCall({
+      feature: "recommendation",
+      provider: env.AI_REC_PROVIDER,
+      model: resolveRecModel(env.AI_REC_PROVIDER),
+      status: "fallback",
+      fallback: true,
+      errorReason: "missing GEMINI_API_KEY",
+    });
     return {
       picks: [],
       summary: "Gemini is not configured yet. Add GEMINI_API_KEY to enable recommendations.",
@@ -353,10 +434,44 @@ export async function recommendWines(args: RecommendWinesArgs): Promise<Recommen
   }
 
   try {
-    return await recommendWithRetry(args);
+    await assertAiDailyLimit("recommendation");
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    if (error instanceof AiDailyLimitError) {
+      return {
+        picks: [],
+        summary: "Daily AI call limit reached. Try again tomorrow.",
+        no_strong_match: true,
+        fallback: true,
+        error: "daily AI call limit reached",
+      };
+    }
+    throw error;
+  }
+
+  const startedAt = Date.now();
+  try {
+    const result = await recommendWithRetry(args);
+    await logAiCall({
+      feature: "recommendation",
+      provider: env.AI_REC_PROVIDER,
+      model: resolveRecModel(env.AI_REC_PROVIDER),
+      status: "success",
+      latencyMs: Date.now() - startedAt,
+      fallback: false,
+    });
+    return result;
+  } catch (error) {
+    const message = compactErrorReason(error);
     console.warn(`${env.AI_REC_PROVIDER} recommendation fell back:`, message);
+    await logAiCall({
+      feature: "recommendation",
+      provider: env.AI_REC_PROVIDER,
+      model: resolveRecModel(env.AI_REC_PROVIDER),
+      status: "fallback",
+      latencyMs: Date.now() - startedAt,
+      fallback: true,
+      errorReason: message,
+    });
     return {
       picks: [],
       summary: "Could not generate recommendations right now. Please try again.",
@@ -378,6 +493,14 @@ export async function updatePreferenceProfile(
   }
 
   if (env.AI_PREF_PROVIDER === "deepseek" && !env.DEEPSEEK_API_KEY) {
+    await logAiCall({
+      feature: "preference_update",
+      provider: env.AI_PREF_PROVIDER,
+      model: resolvePrefModel(env.AI_PREF_PROVIDER),
+      status: "fallback",
+      fallback: true,
+      errorReason: "missing DEEPSEEK_API_KEY",
+    });
     return {
       structured: args.currentProfile.structured,
       summary: args.currentProfile.summary,
@@ -385,6 +508,14 @@ export async function updatePreferenceProfile(
   }
 
   if (env.AI_PREF_PROVIDER === "gemini" && !env.GEMINI_API_KEY) {
+    await logAiCall({
+      feature: "preference_update",
+      provider: env.AI_PREF_PROVIDER,
+      model: resolvePrefModel(env.AI_PREF_PROVIDER),
+      status: "fallback",
+      fallback: true,
+      errorReason: "missing GEMINI_API_KEY",
+    });
     return {
       structured: args.currentProfile.structured,
       summary: args.currentProfile.summary,
@@ -392,12 +523,44 @@ export async function updatePreferenceProfile(
   }
 
   try {
-    return await updatePreferenceWithRetry(args);
+    await assertAiDailyLimit("preference_update");
   } catch (error) {
+    if (error instanceof AiDailyLimitError) {
+      return {
+        structured: args.currentProfile.structured,
+        summary: args.currentProfile.summary,
+      };
+    }
+    throw error;
+  }
+
+  const startedAt = Date.now();
+  try {
+    const result = await updatePreferenceWithRetry(args);
+    await logAiCall({
+      feature: "preference_update",
+      provider: env.AI_PREF_PROVIDER,
+      model: resolvePrefModel(env.AI_PREF_PROVIDER),
+      status: "success",
+      latencyMs: Date.now() - startedAt,
+      fallback: false,
+    });
+    return result;
+  } catch (error) {
+    const message = compactErrorReason(error);
     console.warn(
       `${env.AI_PREF_PROVIDER} preference update fell back:`,
-      error instanceof Error ? error.message : error,
+      message,
     );
+    await logAiCall({
+      feature: "preference_update",
+      provider: env.AI_PREF_PROVIDER,
+      model: resolvePrefModel(env.AI_PREF_PROVIDER),
+      status: "fallback",
+      latencyMs: Date.now() - startedAt,
+      fallback: true,
+      errorReason: message,
+    });
     return {
       structured: args.currentProfile.structured,
       summary: args.currentProfile.summary,

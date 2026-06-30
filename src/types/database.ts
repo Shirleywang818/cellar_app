@@ -128,6 +128,26 @@ export type Database = {
           >;
         Update: Partial<Database["public"]["Tables"]["recommendations"]["Row"]>;
       };
+      ai_call_logs: {
+        Row: {
+          id: string;
+          user_id: string;
+          feature: "label_extraction" | "recommendation" | "preference_update";
+          provider: string;
+          model: string;
+          status: "success" | "fallback" | "error" | "blocked";
+          latency_ms: number | null;
+          fallback: boolean;
+          error_reason: string | null;
+          created_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["ai_call_logs"]["Row"]> &
+          Pick<
+            Database["public"]["Tables"]["ai_call_logs"]["Row"],
+            "user_id" | "feature" | "provider" | "model" | "status"
+          >;
+        Update: Partial<Database["public"]["Tables"]["ai_call_logs"]["Row"]>;
+      };
     };
     Views: Record<string, never>;
     Functions: {

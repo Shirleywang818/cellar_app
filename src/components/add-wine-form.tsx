@@ -488,6 +488,7 @@ function numberOrNull(value: string) {
 
 async function downscaleImage(file: File) {
   if (!file.type.startsWith("image/")) return file;
+  const heic = isHeicImage(file);
 
   try {
     const bitmap = await createImageBitmap(file);
@@ -503,7 +504,10 @@ async function downscaleImage(file: File) {
     canvas.height = Math.round(bitmap.height * scale);
     const context = canvas.getContext("2d");
 
-    if (!context) return file;
+    if (!context) {
+      if (heic) throw new Error(HEIC_MESSAGE);
+      return file;
+    }
 
     context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
 
@@ -511,12 +515,31 @@ async function downscaleImage(file: File) {
       canvas.toBlob(resolve, "image/jpeg", 0.86);
     });
 
-    if (!blob) return file;
+    if (!blob) {
+      if (heic) throw new Error(HEIC_MESSAGE);
+      return file;
+    }
 
     return new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), {
       type: "image/jpeg",
     });
   } catch {
+    if (heic) {
+      throw new Error(HEIC_MESSAGE);
+    }
     return file;
   }
+}
+
+const HEIC_MESSAGE =
+  "This browser could not convert the HEIC photo. In iPhone Settings, set Camera > Formats to Most Compatible, or upload a JPEG/PNG label photo.";
+
+function isHeicImage(file: File) {
+  const name = file.name.toLowerCase();
+  return (
+    file.type === "image/heic" ||
+    file.type === "image/heif" ||
+    name.endsWith(".heic") ||
+    name.endsWith(".heif")
+  );
 }
