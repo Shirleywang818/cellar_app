@@ -361,7 +361,7 @@ is a configuration/auth swap, not a data-model or access-pattern change.
 | **2. Cellar** | List/grid, search/filter, detail, edit, quantity +/-, inventory event history. | Usable inventory. |
 | **3. Recommend** | Recommendation form + endpoint + DeepSeek reasoning + results UI. | Core value delivered. |
 | **4. Preferences** | Tasting log + preference profile + injection into recs. | Recs get personal. |
-| **5. Polish/PWA** | Manifest, icons, install prompt, empty/error states, cost guardrails. | Shippable personal app. |
+| **5. Polish/PWA** | Manifest, icons, install prompt, empty/error states, cost guardrails. | Complete — shippable personal app baseline. |
 | **6. (Later) Release** | Enforce auth, multi-user check, README, optional Capacitor wrap. | GitHub / App Store ready. |
 | **7. (Later) Optional extra label image** | Let a capture include a back label / second image when the front label is insufficient. | Better extraction for difficult labels. |
 | **8. (Later) Multi-bottle capture** | Vision returns an array of detected bottles from one photo; batch confirm flow. | Faster bulk cataloging. |

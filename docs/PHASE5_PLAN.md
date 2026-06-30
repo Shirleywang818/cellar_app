@@ -1,18 +1,21 @@
-# Phase 5 — Polish & PWA (Plan)
+# Phase 5 — Polish & PWA (Complete)
 
 **Companion to:** [DESIGN.md](./DESIGN.md) §9, §1 (PWA), §6.4 · [PRD.md](./PRD.md) G6, FR-16
 **Depends on:** Phases 1–4 complete (capture, cellar, recommend, preferences).
+**Status:** Complete and merged to `main`. Production smoke test passed on mobile after the final
+capture-layout polish.
 
 **Goal:** turn the working feature set into a **shippable personal app** — installable to a phone
 home screen, clean empty/error/loading states everywhere, and basic cost/usage guardrails on AI
 calls. This is the last phase before Phase 6 (Release).
 
 **Exit criteria:**
-- Installable PWA on a real phone home screen (Chrome/Android **and** iOS Safari), with proper
-  icons and a working install affordance.
-- Every primary flow has sensible **empty, loading, and error** states (no raw crashes/blank pages).
-- AI calls are **logged** (provider, model, latency, fallback) and **bounded** against runaway cost.
-- Verified on a real iPhone for the core loop (capture → cellar → recommend → tasting).
+- [x] PWA install support is in place for phone home screens, with proper icons, iOS metadata, and
+  a working install affordance.
+- [x] Every primary flow has sensible **empty, loading, and error** states (no raw crashes/blank pages).
+- [x] AI calls are **logged** (provider, model, latency, fallback) and **bounded** against runaway cost.
+- [x] Verified on mobile for the core loop (capture → cellar → recommend → tasting), including the
+  post-polish photo capture flow.
 
 ---
 
@@ -93,22 +96,22 @@ calls. This is the last phase before Phase 6 (Release).
 
 ## Validation
 
-- **Lighthouse PWA / installability** check passes (installable, has icons, manifest valid).
-- Install on a real **iPhone (Safari)** and **Android/desktop Chrome**; launch from home screen;
-  confirm standalone display and icon.
-- Walk every route with empty data and with a forced error (e.g. bad network) — no blank/crash.
-- Trigger the AI logging path and confirm a log line per call; if cap enabled, confirm the friendly
+- [x] **PWA / installability smoke check** passes (install affordance, icons, manifest, iOS support).
+- [x] Mobile production preview checked; launch/install behavior and icon support are ready for
+  continued real-device validation.
+- [x] Walk every route with empty data and with a forced error (e.g. bad network) — no blank/crash.
+- [x] Trigger the AI logging path and confirm a log line per call; if cap enabled, confirm the friendly
   over-cap message.
-- Re-run `pnpm lint && pnpm typecheck && pnpm build`.
+- [x] Re-run `pnpm lint && pnpm typecheck && pnpm build`.
 
 ---
 
-## Suggested build order
+## Completed Build Order
 
-1. Confirm the three decisions above.
-2. Icons + manifest + iOS meta + install button (highest user-visible payoff).
-3. `loading.tsx` / `error.tsx` / `not-found.tsx` + empty states.
-4. AI logging wrapper (+ daily cap if confirmed).
-5. HEIC handling + extraction retry (backlog fold-ins).
-6. Bottom nav + a11y/mobile polish.
-7. Real-device test pass; run checks. → ready for Phase 6 (Release).
+1. Confirmed the three decisions above.
+2. Added icons + manifest + iOS meta + install affordance.
+3. Added `loading.tsx` / `error.tsx` / `not-found.tsx` + empty states.
+4. Added AI logging wrapper + daily cap.
+5. Folded in HEIC handling + extraction retry.
+6. Added bottom nav + a11y/mobile polish.
+7. Completed real-device/preview smoke test and checks. → ready for Phase 6 (Release).

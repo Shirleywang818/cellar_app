@@ -6,24 +6,6 @@ they become active work.
 
 ---
 
-## Reliability
-
-- **AI extraction retry (DESIGN §6.1).** `extractWineLabel` currently makes a single Gemini attempt
-  and falls back to a manual/empty form on any failure. Design specifies "retry once on 429/5xx with
-  bounded backoff." Add a single bounded retry on transient errors.
-  - *Where:* `src/lib/ai/gateway.ts` (`extractWithGemini`). Target: Phase 3 (when AI hardening
-    happens for recommendations) or sooner if extraction flakiness shows up.
-
-## Capture / images
-
-- **HEIC handling on iOS Safari (Phase 1 item 4).** `downscaleImage` uses `createImageBitmap`,
-  which may not decode HEIC/HEIF in all browsers. On failure it uploads the original file, and a raw
-  HEIC may be rejected by the vision provider. Low risk on Chrome/Android (JPEG), real risk on iOS
-  Safari camera capture.
-  - *Where:* `src/components/add-wine-form.tsx`. Action: test on a real iPhone; if needed, convert
-    HEIC → JPEG before upload or reject with a clear message. Revisit during Phase 5 (PWA/device
-    testing) or before any iOS demo.
-
 ## Infrastructure / reproducibility
 
 - **`wine-labels` bucket is not codified (Phase 1 item 5).** The private Storage bucket was created
@@ -34,10 +16,10 @@ they become active work.
 
 ## Cellar (Phase 2 follow-ups)
 
-- **Orphaned label photo on wine delete.** `DELETE /api/wines/[id]` removes the row and cascades
-  `inventory_events`, but does not delete the label object from the `wine-labels` bucket.
-  - *Where:* `src/app/api/wines/[id]/route.ts` DELETE handler — fetch `photo_path` and remove the
-    Storage object (and/or a sweep job). Pairs with the existing abandoned-capture cleanup item.
+- **Abandoned pending label cleanup.** Wine delete now removes referenced label objects, but a user
+  can still abandon capture after extraction and leave an unreferenced `pending/` Storage object.
+  Add a small admin/scripted sweep for `pending/` objects older than a short retention window.
+  - *Where:* `supabase/storage` or a one-off maintenance script. Target: Phase 6 or later.
 
 - **Search term injected into PostgREST `.or()`.** `listWines` interpolates the user query into the
   `.or()` filter string; commas are stripped but `()`/`\`/`%`/`_` are not. Low severity in v1
@@ -82,3 +64,11 @@ they become active work.
 
 - **Phase 2:** `inventory_events` table + migration, the `wines.quantity` ↔ events invariant
   (single transaction), and a backfill of one `purchase` event per existing wine. See DESIGN §3.
+
+---
+
+## Recently resolved
+
+- **Phase 5:** AI extraction retry on transient Gemini errors.
+- **Phase 5:** HEIC/HEIF capture failure now stops before upload with clear user-facing guidance.
+- **Phase 5:** Wine delete now removes the referenced label image as best-effort cleanup.
