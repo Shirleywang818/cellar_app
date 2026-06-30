@@ -70,6 +70,7 @@ const LOW_CONFIDENCE_THRESHOLD = 0.72;
 
 export function AddWineForm() {
   const router = useRouter();
+  const fileInputId = "wine-label-photo";
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -213,7 +214,10 @@ export function AddWineForm() {
 
       <section className="grid gap-4 rounded-md border border-border bg-card p-4 shadow-sm">
         <div className="grid gap-3 sm:grid-cols-[180px_1fr]">
-          <div className="flex aspect-[3/4] items-center justify-center overflow-hidden rounded-md bg-muted">
+          <label
+            className="group flex aspect-[3/4] cursor-pointer items-center justify-center overflow-hidden rounded-md bg-muted outline-none ring-ring transition hover:bg-muted/80 focus-within:ring-2"
+            htmlFor={fileInputId}
+          >
             {previewUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -222,24 +226,31 @@ export function AddWineForm() {
                 src={previewUrl}
               />
             ) : (
-              <Camera aria-hidden="true" className="size-8 text-muted-foreground" />
+              <span className="grid place-items-center gap-2 text-sm font-medium text-muted-foreground">
+                <Camera aria-hidden="true" className="size-8" />
+                Choose photo
+              </span>
             )}
-          </div>
+            <input
+              accept="image/*"
+              capture="environment"
+              className="sr-only"
+              id={fileInputId}
+              onChange={handleFileChange}
+              type="file"
+            />
+          </label>
 
           <div className="flex flex-col justify-center gap-3">
-            <label className="inline-flex w-fit cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium">
+            <label
+              className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium sm:w-fit"
+              htmlFor={fileInputId}
+            >
               <Upload aria-hidden="true" className="size-4" />
-              Select Label
-              <input
-                accept="image/*"
-                capture="environment"
-                className="sr-only"
-                onChange={handleFileChange}
-                type="file"
-              />
+              Choose photo
             </label>
             <button
-              className="inline-flex w-fit items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60 sm:w-fit"
               disabled={!selectedFile || isExtracting}
               onClick={handleExtract}
               type="button"
@@ -365,6 +376,8 @@ export function AddWineForm() {
             />
           </label>
         </section>
+
+        {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
 
         <div className="flex justify-end gap-3">
           <Link

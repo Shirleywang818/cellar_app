@@ -30,30 +30,30 @@ export default async function Home({ searchParams }: HomeProps) {
 
   return (
     <main className="shell">
-      <header className="mb-8 flex items-center justify-between gap-4 border-b border-border pb-5">
+      <header className="mb-8 flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm font-medium text-primary">Hello cellar</p>
           <h1 className="mt-1 text-3xl font-semibold tracking-normal">
             Cellar wines
           </h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:items-center">
           <Link
-            className="inline-flex items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium shadow-sm"
+            className="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium shadow-sm"
             href="/preferences"
           >
             <Heart aria-hidden="true" className="size-4" />
             Preferences
           </Link>
           <Link
-            className="inline-flex items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium shadow-sm"
+            className="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium shadow-sm"
             href="/recommend"
           >
             <Sparkles aria-hidden="true" className="size-4" />
             Recommend
           </Link>
           <Link
-            className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-sm"
+            className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-sm"
             href="/add"
           >
             <Wine aria-hidden="true" className="size-4" />

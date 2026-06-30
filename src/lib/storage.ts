@@ -67,7 +67,8 @@ export async function finalizeLabelImage(photoPath: string | null | undefined) {
     .move(photoPath, finalPath);
 
   if (error) {
-    throw new Error(`Failed to finalize label image: ${error.message}`);
+    console.warn(`Failed to finalize label image ${photoPath}:`, error.message);
+    return photoPath;
   }
 
   return finalPath;
